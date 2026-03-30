@@ -1,0 +1,5 @@
+{
+  "name": "Laurianna Flow",
+  "description": "A high-performance WebGL2 flowchart studio and viewer.",
+  "requestFramePermissions": []
+}
