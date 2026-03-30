@@ -9,6 +9,8 @@ import { RotateCw } from 'lucide-react';
 import * as THREE from 'three';
 import CustomShaderMaterial from 'three-custom-shader-material';
 
+import { SpatialHash } from '../shared/utils/SpatialHash';
+
 const RotateHandle = ({ shapeId, position, rotation }: { shapeId: string, position: [number, number], rotation: number }) => {
   const { setIsRotating, setDragOffset, setIsPanning } = useFlowchartStore();
   const pointerStartRef = useRef<{ x: number, y: number } | null>(null);
@@ -22,8 +24,6 @@ const RotateHandle = ({ shapeId, position, rotation }: { shapeId: string, positi
       return;
     }
 
-    // For left click, we wait for move to decide if it's rotation
-    // But we can set the offset now
     const dx = e.point.x - position[0];
     const dy = e.point.y - position[1];
     const startAngle = Math.atan2(dy, dx);
@@ -55,18 +55,25 @@ const RotateHandle = ({ shapeId, position, rotation }: { shapeId: string, positi
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
-      {/* Invisible hit area - Adjusted to match the visual w-40 (160px) button size at zoom 10 */}
-      <circleGeometry args={[8, 32]} />
-      <meshBasicMaterial transparent opacity={0} />
-      
       {/* Visual handle - matches RadialMenu trigger style */}
-      <Html center transform scale={1} zIndexRange={[10000, 10100]} portal={{ current: document.body }}>
+      <Html 
+        center 
+        transform 
+        scale={1} 
+        zIndexRange={[10000, 10100]} 
+        portal={{ current: document.body }}
+        pointerEvents="none" // Ensure Html doesn't block the mesh events
+      >
         <div className="pointer-events-none w-40 h-40 rounded-full bg-background border-[8px] border-primary text-primary flex items-center justify-center shadow-[0_0_80px_rgba(var(--primary-rgb),0.4)]">
           <div className="scale-[4]">
             <RotateCw size={22} />
           </div>
         </div>
       </Html>
+
+      {/* Precise hit area - Adjusted to match the visual button size */}
+      <circleGeometry args={[4, 32]} />
+      <meshBasicMaterial transparent opacity={0} />
     </mesh>
   );
 };
@@ -169,6 +176,32 @@ export const FlowchartNodes = () => {
   const { shapes, selectedId, setSelectedId, activeTool, updateShape, editingId, setEditingId, linkingFrom } = useFlowchartStore();
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const materialRef = useRef<any>(null);
+  const { camera, size } = useThree();
+
+  // Phase 3: Spatial Hash Engine
+  // Build hash once per change, query per frame for virtualization
+  const spatialHash = useMemo(() => {
+    const hash = new SpatialHash(100);
+    shapes.forEach(s => hash.insert(s.id, s.position[0], s.position[1], s.size[0], s.size[1]));
+    return hash;
+  }, [shapes]);
+
+  // Determine visible shapes for React overlay virtualization
+  const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
+
+  useFrame(() => {
+    // Calculate viewport bounds in world coordinates
+    const aspect = size.width / size.height;
+    const vHeight = 2 * Math.tan((camera as THREE.PerspectiveCamera).fov * Math.PI / 360) * Math.abs(camera.position.z);
+    const vWidth = vHeight * aspect;
+    
+    const queryIds = spatialHash.query(camera.position.x, camera.position.y, vWidth * 1.5, vHeight * 1.5);
+    
+    // Only update if the set of IDs has changed to avoid React churn
+    if (queryIds.size !== visibleIds.size || [...queryIds].some(id => !visibleIds.has(id))) {
+      setVisibleIds(queryIds);
+    }
+  });
 
   // Instanced Attributes
   const colorArray = useMemo(() => new Float32Array(shapes.length * 3), [shapes.length]);
@@ -325,8 +358,8 @@ export const FlowchartNodes = () => {
         />
       </instancedMesh>
 
-      {/* Individual Overlays (Text, Menu, Ports) */}
-      {shapes.map((shape) => {
+      {/* Individual Overlays (Text, Menu, Ports) - Virtualized via Spatial Hash */}
+      {shapes.filter(s => visibleIds.has(s.id) || s.id === selectedId).map((shape) => {
         const menuOffset = getMenuOffset(shape, shapes);
         
         return (
