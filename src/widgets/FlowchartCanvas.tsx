@@ -15,8 +15,8 @@ const FlowchartCanvasInner = () => {
   const currentTheme = useMemo(() => (themes as any)[themeName], [themeName]);
   const isDark = currentTheme.mode === 'dark';
   const bgColor = isDark ? currentTheme.neutral_dark : currentTheme.neutral_light;
-  const gridColor = currentTheme.primary;
-  const cellColor = isDark ? '#111' : '#ddd';
+  const gridColor = isDark ? '#222222' : '#dddddd';
+  const cellColor = isDark ? '#111111' : '#eeeeee';
 
   const wasLinkingRef = useRef(false);
   const wasDraggingRef = useRef(false);
@@ -121,21 +121,20 @@ const FlowchartCanvasInner = () => {
     }
 
     // Sync camera state to store for minimap
-    const currentPos = cam.position.toArray() as [number, number, number];
     const currentZoom = cam.zoom;
     const worldWidth = state.size.width / currentZoom;
     const worldHeight = state.size.height / currentZoom;
     
     const prevCameraState = useFlowchartStore.getState().cameraState;
     if (
-      prevCameraState.position[0] !== currentPos[0] ||
-      prevCameraState.position[1] !== currentPos[1] ||
-      prevCameraState.position[2] !== currentPos[2] ||
+      prevCameraState.position[0] !== cam.position.x ||
+      prevCameraState.position[1] !== cam.position.y ||
+      prevCameraState.position[2] !== cam.position.z ||
       prevCameraState.zoom !== currentZoom ||
       prevCameraState.worldWidth !== worldWidth ||
       prevCameraState.worldHeight !== worldHeight
     ) {
-      setCameraState(currentPos, currentZoom, worldWidth, worldHeight);
+      setCameraState([cam.position.x, cam.position.y, cam.position.z], currentZoom, worldWidth, worldHeight);
     }
   });
 
@@ -201,27 +200,45 @@ const FlowchartCanvasInner = () => {
 
     const position: [number, number] = [event.point.x, event.point.y];
     
+    const id = Math.random().toString(36);
+    let size: [number, number] = [20, 15];
+    let vertices: [number, number][] = [[-10, -7.5], [10, -7.5], [10, 7.5], [-10, 7.5]];
+
     if (activeTool === 'text') {
-      const id = Math.random().toString(36);
-      addShape({
-        id,
-        type: 'text',
-        position,
-        size: [20, 5],
-        vertices: [[-10, -2.5], [10, -2.5], [10, 2.5], [-10, 2.5]],
-        text: '',
-      });
-      setEditingId(id);
-      return;
+      size = [20, 5];
+      vertices = [[-10, -2.5], [10, -2.5], [10, 2.5], [-10, 2.5]];
+    } else if (activeTool === 'terminal') {
+      size = [25, 10];
+      vertices = [[-12.5, -5], [12.5, -5], [12.5, 5], [-12.5, 5]];
+    } else if (activeTool === 'parallelogram') {
+      size = [22, 15];
+      vertices = [[-11, -7.5], [11, -7.5], [11, 7.5], [-11, 7.5]];
+    } else if (activeTool === 'hexagon') {
+      size = [24, 15];
+      vertices = [[-12, -7.5], [12, -7.5], [12, 7.5], [-12, 7.5]];
+    } else if (activeTool === 'trapezoid') {
+      size = [22, 15];
+      vertices = [[-11, -7.5], [11, -7.5], [11, 7.5], [-11, 7.5]];
+    } else if (activeTool === 'display') {
+      size = [24, 15];
+      vertices = [[-12, -7.5], [12, -7.5], [12, 7.5], [-12, 7.5]];
     }
 
     addShape({
-      id: Math.random().toString(36),
+      id,
       type: activeTool as any,
       position,
-      size: [20, 15],
-      vertices: [[-10, -7.5], [10, -7.5], [10, 7.5], [-10, 7.5]],
+      size,
+      vertices,
+      text: activeTool === 'text' ? '' : undefined,
     });
+
+    setSelectedId(id);
+
+    if (activeTool === 'text') {
+      setEditingId(id);
+      setActiveTool('select'); // Switch back to select tool after placing text
+    }
   };
 
   useEffect(() => {
@@ -237,10 +254,31 @@ const FlowchartCanvasInner = () => {
   const handlePointerMove = (e: any) => {
     if (mode === 'viewer') return;
 
+    let currentIsDragging = isDragging;
+    let currentIsPanning = isPanning;
+    let currentIsRotating = isRotating;
+    let currentLinkingFrom = linkingFrom;
+
+    if (e.nativeEvent.buttons === 0) {
+      if (isDragging) { setIsDragging(false); currentIsDragging = false; }
+      if (isPanning) { setIsPanning(false); currentIsPanning = false; }
+      if (isRotating) { setIsRotating(false); currentIsRotating = false; }
+      if (linkingFrom) {
+        setLinkingFrom(null);
+        setLinkingTo(null);
+        currentLinkingFrom = null;
+      }
+    }
+
+    // Update pointer position for placement indicator
+    if (e.point) {
+      useFlowchartStore.getState().setPointerPosition([e.point.x, e.point.y]);
+    }
+
     const zoom = (camera as THREE.OrthographicCamera).zoom;
 
     // Handle Rotation
-    if (isRotating && selectedId && e.nativeEvent.buttons !== 0) {
+    if (currentIsRotating && selectedId && e.nativeEvent.buttons !== 0) {
       const shapes = useFlowchartStore.getState().shapes;
       const shape = shapes.find(s => s.id === selectedId);
       if (shape) {
@@ -260,7 +298,7 @@ const FlowchartCanvasInner = () => {
     }
 
     // Handle Manual Panning (from Radial Menu or Right Click)
-    if (isPanning && e.nativeEvent.buttons !== 0) {
+    if (currentIsPanning && e.nativeEvent.buttons !== 0) {
       const dx = e.nativeEvent.movementX / zoom;
       const dy = -e.nativeEvent.movementY / zoom;
       camera.position.x -= dx;
@@ -273,7 +311,7 @@ const FlowchartCanvasInner = () => {
     }
 
     // Handle Dragging / Linking (with Reach Pan)
-    if (isDragging || linkingFrom) {
+    if (currentIsDragging || currentLinkingFrom) {
       const zoom = (camera as THREE.OrthographicCamera).zoom;
       // Use native movement for precise camera tracking
       const dx = e.nativeEvent.movementX / zoom;
@@ -287,13 +325,13 @@ const FlowchartCanvasInner = () => {
       }
     }
 
-    if (linkingFrom && e.point) {
+    if (currentLinkingFrom && e.point) {
       setLinkingTo([e.point.x, e.point.y]);
       return;
     }
 
-    const isShapeTool = ['box', 'diamond', 'circle', 'custom', 'text'].includes(activeTool);
-    if (!selectedId || (!isShapeTool && activeTool !== 'select') || !isDragging) return;
+    const isDraggableTool = activeTool !== 'link' && activeTool !== 'vertex';
+    if (!selectedId || !isDraggableTool || !currentIsDragging) return;
     
     if (e.point) {
       const GRID_SIZE = 5;
@@ -311,6 +349,8 @@ const FlowchartCanvasInner = () => {
 
   const handlePointerDown = (e: any) => {
     wasPanningRef.current = false;
+    wasDraggingRef.current = false;
+    wasLinkingRef.current = false;
     pointerDownPos.current = [e.clientX, e.clientY];
 
     if (e.button === 2) {
@@ -414,9 +454,9 @@ const FlowchartCanvasInner = () => {
         cellSize={10}
         sectionSize={50}
         sectionColor={gridColor}
-        sectionThickness={1}
+        sectionThickness={1.5}
         cellColor={cellColor}
-        cellThickness={0.5}
+        cellThickness={1.0}
         rotation={[Math.PI / 2, 0, 0]}
         position={[0, 0, -5]}
       />
@@ -432,14 +472,12 @@ const FlowchartCanvasInner = () => {
         />
       </mesh>
 
-      <EffectComposer>
+      <EffectComposer multisampling={8}>
         <Bloom 
           luminanceThreshold={isDark ? 1.0 : 1.5} 
           luminanceSmoothing={0.5} 
           intensity={isDark ? 0.5 : 0.2} 
         />
-        <ChromaticAberration offset={new THREE.Vector2(0.0005, 0.0005)} />
-        <Noise opacity={isDark ? 0.002 : 0.001} />
         <Vignette eskil={false} offset={0.1} darkness={isDark ? 0.8 : 0.2} />
       </EffectComposer>
 

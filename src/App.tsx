@@ -32,6 +32,9 @@ export default function App() {
   const setSelectedId = useFlowchartStore(state => state.setSelectedId);
   const mode = useFlowchartStore(state => state.mode);
   const themeName = useFlowchartStore(state => state.themeName);
+  const shapes = useFlowchartStore(state => state.shapes);
+  const updateShape = useFlowchartStore(state => state.updateShape);
+  const editingShape = shapes.find(s => s.id === editingId);
 
   useEffect(() => {
     const theme = (themes as any)[themeName];
@@ -131,11 +134,33 @@ export default function App() {
       // For now, let's assume OrbitControls handles +/- if we enable it, 
       // but we'll implement custom zoom logic in canvas.
 
-      // Tool mapping 1-9
-      const toolMap: any[] = ['select', 'text', 'box', 'diamond', 'circle', 'vertex', 'link'];
-      const num = parseInt(e.key);
-      if (!isNaN(num) && num >= 1 && num <= toolMap.length) {
-        setActiveTool(toolMap[num - 1]);
+      // Tool mapping
+      const toolMap: Record<string, string> = {
+        '1': 'select',
+        '2': 'text',
+        '3': 'box',
+        '4': 'diamond',
+        '5': 'circle',
+        '6': 'parallelogram',
+        '7': 'cylinder',
+        '8': 'document',
+        '9': 'hexagon',
+        '0': 'trapezoid',
+        't': 'terminal',
+        'p': 'predefined_process',
+        's': 'internal_storage',
+        'i': 'manual_input',
+        'd': 'display',
+        'o': 'or',
+        'u': 'summing_junction',
+        'c': 'off_page_connector',
+        'v': 'vertex',
+        'l': 'link'
+      };
+
+      const key = e.key.toLowerCase();
+      if (toolMap[key]) {
+        setActiveTool(toolMap[key] as any);
       }
     };
 
@@ -148,6 +173,48 @@ export default function App() {
       <FlowchartCanvas />
       <Toolbar />
       {mode === 'studio' && <ControlsHint />}
+      {/* Hidden textarea for text editing */}
+      {editingId && (
+        <textarea
+          autoFocus
+          className="fixed top-[-9999px] left-[-9999px] opacity-0"
+          value={editingShape?.text || ''}
+          onFocus={(e) => {
+            const val = e.target.value;
+            e.target.setSelectionRange(val.length, val.length);
+          }}
+          onChange={(e) => updateShape(editingId, { text: e.target.value })}
+          onBlur={(e) => {
+            // Delay to allow canvas clicks to process first
+            setTimeout(() => {
+              if (useFlowchartStore.getState().editingId === editingId) {
+                const currentShape = useFlowchartStore.getState().shapes.find(s => s.id === editingId);
+                if (currentShape && (!currentShape.text || currentShape.text.trim() === '')) {
+                  useFlowchartStore.getState().deleteShape(editingId);
+                }
+                useFlowchartStore.getState().setEditingId(null);
+              }
+            }, 100);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              const currentShape = useFlowchartStore.getState().shapes.find(s => s.id === editingId);
+              if (currentShape && (!currentShape.text || currentShape.text.trim() === '')) {
+                useFlowchartStore.getState().deleteShape(editingId);
+              }
+              setEditingId(null);
+            }
+            if (e.key === 'Escape') {
+              const currentShape = useFlowchartStore.getState().shapes.find(s => s.id === editingId);
+              if (currentShape && (!currentShape.text || currentShape.text.trim() === '')) {
+                useFlowchartStore.getState().deleteShape(editingId);
+              }
+              setEditingId(null);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

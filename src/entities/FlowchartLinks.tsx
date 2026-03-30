@@ -103,10 +103,10 @@ export const FlowchartLinks = () => {
           <Line
             key={link.id}
             points={points}
-            color={currentTheme.primary}
-            lineWidth={2}
+            color={currentTheme.mode === 'dark' ? currentTheme.neutral_light : currentTheme.neutral_dark}
+            lineWidth={2.5}
             transparent
-            opacity={0.8}
+            opacity={0.9}
             onClick={(e) => e.stopPropagation()}
           />
         );
@@ -121,7 +121,7 @@ export const FlowchartLinks = () => {
             undefined,
             shapes.find(s => s.id === linkingFrom.id)?.rotation || 0
           )}
-          color={currentTheme.accent}
+          color={currentTheme.mode === 'dark' ? currentTheme.neutral_light : currentTheme.neutral_dark}
           lineWidth={1.5}
           dashed
           transparent

@@ -16,6 +16,7 @@ const RotateHandle = ({ shapeId, position, rotation }: { shapeId: string, positi
   const setIsRotating = useFlowchartStore(state => state.setIsRotating);
   const setDragOffset = useFlowchartStore(state => state.setDragOffset);
   const setIsPanning = useFlowchartStore(state => state.setIsPanning);
+  const [hovered, setHovered] = useState(false);
   const pointerStartRef = useRef<{ x: number, y: number } | null>(null);
 
   const handlePointerDown = (e: any) => {
@@ -58,6 +59,8 @@ const RotateHandle = ({ shapeId, position, rotation }: { shapeId: string, positi
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerOver={() => setHovered(true)}
+      onPointerOut={() => setHovered(false)}
     >
       {/* Visual handle - matches RadialMenu trigger style */}
       <Html 
@@ -66,16 +69,18 @@ const RotateHandle = ({ shapeId, position, rotation }: { shapeId: string, positi
         scale={1} 
         zIndexRange={[10000, 10100]} 
         portal={{ current: document.body }}
-        pointerEvents="none" // Ensure Html doesn't block the mesh events
+        pointerEvents="none" 
       >
-        <div className="pointer-events-none w-40 h-40 rounded-full bg-background border-[8px] border-primary text-text flex items-center justify-center shadow-[0_0_80px_rgba(var(--primary-rgb),0.4)]">
+        <div className={`pointer-events-none w-40 h-40 rounded-full bg-background border-[8px] text-text flex items-center justify-center transition-all duration-300 ${
+          hovered ? 'border-accent scale-110 shadow-[0_0_100px_rgba(var(--accent-rgb),0.8)]' : 'border-primary shadow-[0_0_80px_rgba(var(--primary-rgb),0.4)]'
+        }`}>
           <div className="scale-[4]">
-            <RotateCw size={22} className="text-primary" />
+            <RotateCw size={22} className={hovered ? 'text-accent' : 'text-primary'} />
           </div>
         </div>
       </Html>
 
-      {/* Precise hit area - Adjusted to match the visual button size */}
+      {/* Precise hit area */}
       <circleGeometry args={[4, 32]} />
       <meshBasicMaterial transparent opacity={0} />
     </mesh>
@@ -103,6 +108,7 @@ const VertexHandle = ({ position, onDrag, onDragStart, color }: { position: [num
           onDrag([e.point.x, e.point.y]);
         }
       }}
+      scale={hovered ? 1.5 : 1}
     >
       <circleGeometry args={[0.5, 16]} />
       <meshBasicMaterial color={hovered ? '#fff' : currentTheme.accent} />
@@ -189,6 +195,89 @@ const Port = ({ position, type, shapeId }: { position: [number, number], type: a
   );
 };
 
+const PlacementIndicator = () => {
+  const activeTool = useFlowchartStore(state => state.activeTool);
+  const pointerPosition = useFlowchartStore(state => state.pointerPosition);
+  const themeName = useFlowchartStore(state => state.themeName);
+  const currentTheme = (themes as any)[themeName];
+  const materialRef = useRef<any>(null);
+  
+  const isShapeTool = activeTool !== 'select' && activeTool !== 'link' && activeTool !== 'vertex';
+  
+  useFrame(() => {
+    if (materialRef.current && materialRef.current.uniforms) {
+      materialRef.current.uniforms.uTime.value = performance.now() / 1000;
+    }
+  });
+
+  if (!isShapeTool || !pointerPosition) return null;
+  
+  let size: [number, number] = [20, 15];
+  if (activeTool === 'text') size = [20, 5];
+  else if (activeTool === 'terminal') size = [25, 10];
+  else if (activeTool === 'parallelogram') size = [22, 15];
+  else if (activeTool === 'hexagon') size = [24, 15];
+  else if (activeTool === 'trapezoid') size = [22, 15];
+  else if (activeTool === 'display') size = [24, 15];
+  const color = new THREE.Color(currentTheme.primary);
+  
+  const getShapeType = (type: string) => {
+    const mapping: Record<string, number> = {
+      'box': 0.0, 'text': 0.0,
+      'diamond': 1.0,
+      'circle': 2.0,
+      'parallelogram': 3.0,
+      'cylinder': 4.0,
+      'document': 5.0,
+      'hexagon': 6.0,
+      'trapezoid': 7.0,
+      'terminal': 8.0,
+      'predefined_process': 9.0,
+      'internal_storage': 10.0,
+      'manual_input': 11.0,
+      'display': 12.0,
+      'or': 16.0,
+      'summing_junction': 17.0,
+      'off_page_connector': 18.0
+    };
+    return mapping[type] ?? 0.0;
+  };
+
+  const colorArray = new Float32Array([color.r, color.g, color.b, color.r, color.g, color.b, color.r, color.g, color.b, color.r, color.g, color.b]);
+  const shapeTypeArray = new Float32Array([getShapeType(activeTool), getShapeType(activeTool), getShapeType(activeTool), getShapeType(activeTool)]);
+  const isSelectedArray = new Float32Array([1.0, 1.0, 1.0, 1.0]);
+  const sizeArray = new Float32Array([size[0] + 12, size[1] + 12, size[0] + 12, size[1] + 12, size[0] + 12, size[1] + 12, size[0] + 12, size[1] + 12]);
+  const opacityArray = new Float32Array([0.3, 0.3, 0.3, 0.3]);
+  const materialArray = new Float32Array([0.0, 0.0, 0.0, 0.0]);
+
+  return (
+    <mesh position={[pointerPosition[0], pointerPosition[1], 0.1]} scale={[size[0] + 12, size[1] + 12, 1]}>
+      <planeGeometry args={[1, 1]}>
+        <bufferAttribute attach="attributes-aColor" args={[colorArray, 3]} />
+        <bufferAttribute attach="attributes-aShapeType" args={[shapeTypeArray, 1]} />
+        <bufferAttribute attach="attributes-aIsSelected" args={[isSelectedArray, 1]} />
+        <bufferAttribute attach="attributes-aSize" args={[sizeArray, 2]} />
+        <bufferAttribute attach="attributes-aOpacity" args={[opacityArray, 1]} />
+        <bufferAttribute attach="attributes-aMaterial" args={[materialArray, 1]} />
+      </planeGeometry>
+      <CustomShaderMaterial
+        ref={materialRef}
+        baseMaterial={THREE.MeshPhysicalMaterial}
+        vertexShader={ShapeSDFVertexShader}
+        fragmentShader={ShapeSDFFragmentShader}
+        transparent
+        roughness={0.1}
+        metalness={0.8}
+        clearcoat={1.0}
+        clearcoatRoughness={0.1}
+        uniforms={{
+          uTime: { value: 0.0 },
+        }}
+      />
+    </mesh>
+  );
+};
+
 export const FlowchartNodes = () => {
   const shapes = useFlowchartStore(state => state.shapes);
   const selectedId = useFlowchartStore(state => state.selectedId);
@@ -200,9 +289,18 @@ export const FlowchartNodes = () => {
   const linkingFrom = useFlowchartStore(state => state.linkingFrom);
   
   const meshRef = useRef<THREE.InstancedMesh>(null);
+  const portMeshRef = useRef<THREE.InstancedMesh>(null);
   const materialRef = useRef<any>(null);
   const { camera, size } = useThree();
   const themeName = useFlowchartStore(state => state.themeName);
+
+  // Reusable THREE objects to avoid GC pressure in hot loops
+  const tempMatrix = useRef(new THREE.Matrix4());
+  const tempRotation = useRef(new THREE.Quaternion());
+  const tempPosition = useRef(new THREE.Vector3());
+  const tempScale = useRef(new THREE.Vector3(1, 1, 1));
+  const tempEuler = useRef(new THREE.Euler());
+  const tempColor = useRef(new THREE.Color());
 
   // Phase 3: Spatial Hash Engine
   // Build hash once per change, query per frame for virtualization
@@ -215,8 +313,19 @@ export const FlowchartNodes = () => {
   // Determine visible shapes for React overlay virtualization
   const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
   const lastVisibleIdsRef = useRef<Set<string>>(new Set());
+  const lastCameraPos = useRef(new THREE.Vector3());
+  const lastCameraZoom = useRef(0);
 
   useFrame(() => {
+    // Only query if camera moved or zoomed significantly to save CPU
+    const dist = camera.position.distanceTo(lastCameraPos.current);
+    const zoomDiff = Math.abs(camera.zoom - lastCameraZoom.current);
+    
+    if (dist < 1.0 && zoomDiff < 0.05 && visibleIds.size > 0) return;
+    
+    lastCameraPos.current.copy(camera.position);
+    lastCameraZoom.current = camera.zoom;
+
     // Calculate viewport bounds in world coordinates
     const cam = camera as THREE.OrthographicCamera;
     const vWidth = (cam.right - cam.left) / cam.zoom;
@@ -241,17 +350,28 @@ export const FlowchartNodes = () => {
   const sizeArray = useMemo(() => new Float32Array(shapes.length * 2), [shapes.length]);
   const opacityArray = useMemo(() => new Float32Array(shapes.length), [shapes.length]);
   const materialArray = useMemo(() => new Float32Array(shapes.length), [shapes.length]);
+  const portColorArray = useMemo(() => new Float32Array(shapes.length * 4 * 3), [shapes.length]);
 
   const getShapeType = (type: string) => {
-    if (type === 'box') return 0.0;
-    if (type === 'diamond') return 1.0;
-    if (type === 'circle') return 2.0;
-    if (type === 'parallelogram') return 3.0;
-    if (type === 'cylinder') return 4.0;
-    if (type === 'document') return 5.0;
-    if (type === 'hexagon') return 6.0;
-    if (type === 'trapezoid') return 7.0;
-    return 0.0;
+    const mapping: Record<string, number> = {
+      'box': 0.0, 'text': 0.0,
+      'diamond': 1.0,
+      'circle': 2.0,
+      'parallelogram': 3.0,
+      'cylinder': 4.0,
+      'document': 5.0,
+      'hexagon': 6.0,
+      'trapezoid': 7.0,
+      'terminal': 8.0,
+      'predefined_process': 9.0,
+      'internal_storage': 10.0,
+      'manual_input': 11.0,
+      'display': 12.0,
+      'or': 16.0,
+      'summing_junction': 17.0,
+      'off_page_connector': 18.0
+    };
+    return mapping[type] ?? 0.0;
   };
 
   useFrame(() => {
@@ -263,29 +383,25 @@ export const FlowchartNodes = () => {
   useEffect(() => {
     if (!meshRef.current) return;
 
-    const tempMatrix = new THREE.Matrix4();
-    const tempRotation = new THREE.Quaternion();
-    const tempPosition = new THREE.Vector3();
-    const tempScale = new THREE.Vector3(1, 1, 1);
-
     shapes.forEach((shape, i) => {
-      tempPosition.set(shape.position[0], shape.position[1], 0);
-      tempRotation.setFromEuler(new THREE.Euler(0, 0, shape.rotation || 0));
+      tempPosition.current.set(shape.position[0], shape.position[1], 0);
+      tempEuler.current.set(0, 0, shape.rotation || 0);
+      tempRotation.current.setFromEuler(tempEuler.current);
       
       // Set scale to match shape size + padding
-      tempScale.set(shape.size[0] + 12, shape.size[1] + 12, 1);
+      tempScale.current.set(shape.size[0] + 12, shape.size[1] + 12, 1);
       
-      tempMatrix.compose(tempPosition, tempRotation, tempScale);
-      meshRef.current!.setMatrixAt(i, tempMatrix);
+      tempMatrix.current.compose(tempPosition.current, tempRotation.current, tempScale.current);
+      meshRef.current!.setMatrixAt(i, tempMatrix.current);
 
       // Resolve color: per-theme override > global color > theme primary
       const themeColor = shape.themeColors?.[themeName];
       const resolvedColor = themeColor || shape.color || (themes as any)[themeName].primary;
-      const color = new THREE.Color(resolvedColor);
+      tempColor.current.set(resolvedColor);
       
-      colorArray[i * 3] = color.r;
-      colorArray[i * 3 + 1] = color.g;
-      colorArray[i * 3 + 2] = color.b;
+      colorArray[i * 3] = tempColor.current.r;
+      colorArray[i * 3 + 1] = tempColor.current.g;
+      colorArray[i * 3 + 2] = tempColor.current.b;
 
       shapeTypeArray[i] = getShapeType(shape.type);
       isSelectedArray[i] = selectedId === shape.id ? 1.0 : 0.0;
@@ -311,11 +427,20 @@ export const FlowchartNodes = () => {
     if (!shape || !isInsideShape(e.uv, shape)) return;
 
     e.stopPropagation();
+    
+    if (editingId && editingId !== id) {
+      const editingShape = shapes.find(s => s.id === editingId);
+      if (editingShape && (!editingShape.text || editingShape.text.trim() === '')) {
+        useFlowchartStore.getState().deleteShape(editingId);
+      }
+      setEditingId(null);
+    }
+
     setSelectedId(id);
 
     // Start dragging
-    const isShapeTool = ['box', 'diamond', 'circle', 'custom', 'text'].includes(activeTool);
-    if (shape && (activeTool === 'select' || isShapeTool)) {
+    const isDraggableTool = activeTool !== 'link' && activeTool !== 'vertex';
+    if (shape && isDraggableTool) {
       useFlowchartStore.getState().pushToHistory();
       useFlowchartStore.getState().setIsDragging(true);
       useFlowchartStore.getState().setDragOffset([
@@ -348,6 +473,19 @@ export const FlowchartNodes = () => {
     
     updateShape(shapeId, { vertices: newVertices }, true);
   };
+
+  const [cursorVisible, setCursorVisible] = useState(true);
+
+  useEffect(() => {
+    if (editingId) {
+      const interval = setInterval(() => {
+        setCursorVisible(v => !v);
+      }, 500);
+      return () => clearInterval(interval);
+    } else {
+      setCursorVisible(true);
+    }
+  }, [editingId]);
 
   return (
     <group>
@@ -427,52 +565,39 @@ export const FlowchartNodes = () => {
               </>
             )}
 
-            {editingId === shape.id ? (
-              <Html center transform scale={1}>
-                <input
-                  autoFocus
-                  className="bg-transparent text-text border-none outline-none text-center font-bold"
-                  style={{
-                    fontSize: '20px',
-                    width: 'auto',
-                    minWidth: '100px',
-                    textShadow: `0 0 10px ${(themes as any)[themeName].primary}`
-                  }}
-                  value={shape.text || ''}
-                  onChange={(e) => updateShape(shape.id, { text: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') setEditingId(null);
-                  }}
-                />
-              </Html>
-            ) : (
-              shape.text && (
-                <Text
-                  position={[0, 0, 0.1]}
-                  fontSize={2}
-                  color={(themes as any)[themeName].mode === 'dark' ? (themes as any)[themeName].neutral_light : (themes as any)[themeName].neutral_dark}
-                  anchorX="center"
-                  anchorY="middle"
-                  visible={true} // Explicitly visible
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedId(shape.id);
-                  }}
-                  maxWidth={shape.type === 'text' ? 100 : shape.size[0] * 0.8}
-                  onSync={(mesh) => {
-                    if (shape.type === 'text' && mesh.geometry.boundingBox) {
-                      const box = mesh.geometry.boundingBox;
-                      const width = (box.max.x - box.min.x) + 4;
-                      const height = (box.max.y - box.min.y) + 2;
-                      if (Math.abs(shape.size[0] - width) > 0.1 || Math.abs(shape.size[1] - height) > 0.1) {
-                        updateShape(shape.id, { size: [width, height] });
-                      }
+            {/* Text Rendering */}
+            {(shape.text || editingId === shape.id) && (
+              <Text
+                position={[0, 0, 0.1]}
+                fontSize={2}
+                color={(themes as any)[themeName].mode === 'dark' ? (themes as any)[themeName].neutral_light : (themes as any)[themeName].neutral_dark}
+                anchorX="center"
+                anchorY="middle"
+                visible={true}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedId(shape.id);
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  if (activeTool === 'select' || activeTool === 'text' || shape.type === 'text') {
+                    setEditingId(shape.id);
+                  }
+                }}
+                maxWidth={shape.type === 'text' ? 100 : shape.size[0] * 0.8}
+                onSync={(mesh) => {
+                  if (shape.type === 'text' && mesh.geometry.boundingBox) {
+                    const box = mesh.geometry.boundingBox;
+                    const width = (box.max.x - box.min.x) + 4;
+                    const height = (box.max.y - box.min.y) + 2;
+                    if (Math.abs(shape.size[0] - width) > 0.1 || Math.abs(shape.size[1] - height) > 0.1) {
+                      updateShape(shape.id, { size: [width, height] });
                     }
-                  }}
-                >
-                  {shape.text}
-                </Text>
-              )
+                  }
+                }}
+              >
+                {shape.text || ''}{(editingId === shape.id && cursorVisible) ? '_' : ''}
+              </Text>
             )}
 
             {/* Ports for linking */}
@@ -497,6 +622,7 @@ export const FlowchartNodes = () => {
           </group>
         );
       })}
+      <PlacementIndicator />
     </group>
   );
 };

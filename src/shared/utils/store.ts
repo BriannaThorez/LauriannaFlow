@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 
-export type ShapeType = 'box' | 'diamond' | 'circle' | 'parallelogram' | 'cylinder' | 'document' | 'hexagon' | 'trapezoid' | 'custom' | 'text';
+/**
+ * Inspiration Source: https://en.wikipedia.org/wiki/Flowchart#Building_blocks
+ * This source is used to ensure a full variety of standard flowchart shapes.
+ */
+export type ShapeType = 
+  | 'box' | 'diamond' | 'circle' | 'parallelogram' | 'cylinder' | 'document' 
+  | 'hexagon' | 'trapezoid' | 'terminal' | 'predefined_process' 
+  | 'internal_storage' | 'manual_input' | 'display' | 'or' 
+  | 'summing_junction' | 'off_page_connector' | 'custom' | 'text';
 
 export type PortType = 'top' | 'bottom' | 'left' | 'right';
 
@@ -76,9 +84,17 @@ export interface FlowchartState {
   cameraMoveRequest: [number, number] | null;
   requestCameraMove: (pos: [number, number] | null) => void;
   
+  // Pointer tracking for placement indicator
+  pointerPosition: [number, number] | null;
+  setPointerPosition: (pos: [number, number] | null) => void;
+  
   // Theme state
   themeName: string;
   setThemeName: (name: string) => void;
+  
+  // Tooltip deconfliction
+  activeTooltipId: string | null;
+  setActiveTooltipId: (id: string | null) => void;
 }
 
 const getAABB = (shape: Shape) => {
@@ -334,8 +350,15 @@ export const useFlowchartStore = create<FlowchartState>((set, get) => {
     cameraMoveRequest: null,
     requestCameraMove: (cameraMoveRequest) => set({ cameraMoveRequest }),
     
+    pointerPosition: null,
+    setPointerPosition: (pointerPosition) => set({ pointerPosition }),
+    
     // Theme state
     themeName: 'cozy_cabin',
     setThemeName: (themeName) => set({ themeName }),
+    
+    // Tooltip deconfliction
+    activeTooltipId: null,
+    setActiveTooltipId: (activeTooltipId) => set({ activeTooltipId }),
   };
 });

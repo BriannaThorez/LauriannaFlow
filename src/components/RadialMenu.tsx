@@ -71,7 +71,11 @@ const MenuItem = React.memo(({ icon, label, action, index, total, radius, color 
         {icon}
       </div>
       {label && (
-        <span className="absolute -bottom-28 left-1/2 -translate-x-1/2 text-[36px] font-bold uppercase tracking-[0.2em] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-text drop-shadow-[0_0_10px_var(--background)]">
+        <span 
+          className={`absolute left-1/2 -translate-x-1/2 text-[36px] font-bold uppercase tracking-[0.2em] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-text drop-shadow-[0_0_10px_var(--background)] ${
+            y > 0 ? '-top-28' : '-bottom-28'
+          }`}
+        >
           {label}
         </span>
       )}
@@ -82,6 +86,7 @@ const MenuItem = React.memo(({ icon, label, action, index, total, radius, color 
 export const RadialMenu: React.FC<RadialMenuProps> = ({ shapeId }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [menuStack, setMenuStack] = useState<MenuType[]>(['main']);
+  const [hovered, setHovered] = useState(false);
   const updateShape = useFlowchartStore(state => state.updateShape);
   const deleteShape = useFlowchartStore(state => state.deleteShape);
   const shapes = useFlowchartStore(state => state.shapes);
@@ -210,7 +215,7 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({ shapeId }) => {
       style={{
         zIndex: 5000,
         width: 0,
-        height: 0
+        height: 0,
       }}
     >
       {/* Main Trigger Button - Centered on anchor */}
@@ -219,12 +224,14 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({ shapeId }) => {
         whileTap={{ scale: 0.9 }}
         onPointerDown={handleTriggerPointerDown}
         onPointerUp={handleTriggerPointerUp}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
         className={`absolute w-40 h-40 -ml-20 -mt-20 rounded-full bg-background border-[8px] flex items-center justify-center transition-all duration-300 ${
-          isOpen ? 'border-accent text-accent shadow-[0_20px_50px_rgba(0,0,0,0.4)]' : 'border-text/20 text-text shadow-[0_20px_50px_rgba(0,0,0,0.4)]'
+          isOpen || hovered ? 'border-accent text-accent shadow-[0_20px_50px_rgba(0,0,0,0.4)]' : 'border-text/20 text-text shadow-[0_20px_50px_rgba(0,0,0,0.4)]'
         } z-20`}
       >
         <div className="scale-[4]">
-          {isOpen ? <Mouse size={20} className="text-accent" /> : <MoreHorizontal size={22} className="text-text" />}
+          {isOpen ? <Mouse size={20} className="text-accent" /> : <MoreHorizontal size={22} className={hovered ? 'text-accent' : 'text-text'} />}
         </div>
       </motion.button>
 

@@ -1,6 +1,8 @@
-import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect, useId, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useFlowchartStore } from '../utils/store';
+import themes from '../themes/color_palettes.json';
 
 interface SmartTooltipProps {
   children: React.ReactNode;
@@ -17,62 +19,128 @@ export const SmartTooltip: React.FC<SmartTooltipProps> = ({
   shortcut,
   position = 'right'
 }) => {
-  const [isVisible, setIsVisible] = useState(false);
+  const id = useId();
+  const activeTooltipId = useFlowchartStore(state => state.activeTooltipId);
+  const setActiveTooltipId = useFlowchartStore(state => state.setActiveTooltipId);
+  const isVisible = activeTooltipId === id;
+
   const [coords, setCoords] = useState({ x: 0, y: 0 });
+  const [actualPosition, setActualPosition] = useState(position);
   const triggerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const lastUpdateRef = useRef({ x: 0, y: 0, pos: position });
 
-  const updatePosition = () => {
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      let x = 0;
-      let y = 0;
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    
+    const frameId = requestAnimationFrame(() => {
+      const rect = triggerRef.current!.getBoundingClientRect();
+      const padding = 32; // Increased padding for safety
+      const viewportWidth = Math.min(window.innerWidth, document.documentElement.clientWidth);
+      const viewportHeight = Math.min(window.innerHeight, document.documentElement.clientHeight);
+      
+      // Measure or fallback
+      const tooltipWidth = tooltipRef.current?.offsetWidth || 260;
+      const tooltipHeight = tooltipRef.current?.offsetHeight || 160;
 
-      switch (position) {
-        case 'right':
-          x = rect.right + 12;
-          y = rect.top + rect.height / 2;
-          break;
-        case 'left':
-          x = rect.left - 12;
-          y = rect.top + rect.height / 2;
-          break;
-        case 'top':
-          x = rect.left + rect.width / 2;
-          y = rect.top - 12;
-          break;
-        case 'bottom':
-          x = rect.left + rect.width / 2;
-          y = rect.bottom + 12;
-          break;
+      let targetPos = position;
+      
+      const calculateCoords = (pos: typeof position) => {
+        let tx = 0, ty = 0;
+        switch (pos) {
+          case 'right':
+            tx = rect.right + 12;
+            ty = rect.top + rect.height / 2;
+            break;
+          case 'left':
+            tx = rect.left - 12;
+            ty = rect.top + rect.height / 2;
+            break;
+          case 'top':
+            tx = rect.left + rect.width / 2;
+            ty = rect.top - 12;
+            break;
+          case 'bottom':
+            tx = rect.left + rect.width / 2;
+            ty = rect.bottom + 12;
+            break;
+        }
+        return { tx, ty };
+      };
+
+      let { tx, ty } = calculateCoords(targetPos);
+
+      // Flip logic with more buffer
+      if (targetPos === 'right' && tx + tooltipWidth > viewportWidth - padding) targetPos = 'left';
+      else if (targetPos === 'left' && tx - tooltipWidth < padding) targetPos = 'right';
+      
+      if (targetPos === 'bottom' && ty + tooltipHeight > viewportHeight - padding) targetPos = 'top';
+      else if (targetPos === 'top' && ty - tooltipHeight < padding) targetPos = 'bottom';
+
+      if (targetPos !== position) {
+        const flipped = calculateCoords(targetPos);
+        tx = flipped.tx;
+        ty = flipped.ty;
       }
-      setCoords({ x, y });
-    }
-  };
 
-  // Use layout effect for initial positioning to avoid flicker
-  useLayoutEffect(() => {
-    if (isVisible) {
-      updatePosition();
-    }
-  }, [isVisible]);
+      // Strict Clamping based on actual position
+      if (targetPos === 'right' || targetPos === 'left') {
+        const hh = tooltipHeight / 2;
+        ty = Math.max(padding + hh, Math.min(ty, viewportHeight - padding - hh));
+        if (targetPos === 'right') {
+          tx = Math.max(padding, Math.min(tx, viewportWidth - padding - tooltipWidth));
+        } else {
+          tx = Math.max(padding + tooltipWidth, Math.min(tx, viewportWidth - padding));
+        }
+      } else {
+        const hw = tooltipWidth / 2;
+        tx = Math.max(padding + hw, Math.min(tx, viewportWidth - padding - hw));
+        if (targetPos === 'bottom') {
+          ty = Math.max(padding, Math.min(ty, viewportHeight - padding - tooltipHeight));
+        } else {
+          ty = Math.max(padding + tooltipHeight, Math.min(ty, viewportHeight - padding));
+        }
+      }
+
+      // Only update state if values changed significantly to prevent flicker
+      const dx = Math.abs(tx - lastUpdateRef.current.x);
+      const dy = Math.abs(ty - lastUpdateRef.current.y);
+      const posChanged = targetPos !== lastUpdateRef.current.pos;
+
+      if (dx > 0.1 || dy > 0.1 || posChanged) {
+        lastUpdateRef.current = { x: tx, y: ty, pos: targetPos };
+        setActualPosition(targetPos);
+        setCoords({ x: tx, y: ty });
+      }
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [position]);
 
   useEffect(() => {
     if (isVisible) {
-      window.addEventListener('scroll', updatePosition, true);
-      window.addEventListener('resize', updatePosition);
+      const observer = new ResizeObserver(() => updatePosition());
+      if (tooltipRef.current) observer.observe(tooltipRef.current);
+      if (triggerRef.current) observer.observe(triggerRef.current);
+      
+      window.addEventListener('scroll', updatePosition, { passive: true, capture: true });
+      window.addEventListener('resize', updatePosition, { passive: true });
+      updatePosition();
+
+      return () => {
+        observer.disconnect();
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+      };
     }
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true);
-      window.removeEventListener('resize', updatePosition);
-    };
-  }, [isVisible]);
+  }, [isVisible, updatePosition]);
 
   const variants = {
     initial: { 
       opacity: 0, 
       scale: 0.95, 
-      x: position === 'right' ? -10 : position === 'left' ? 10 : 0,
-      y: position === 'bottom' ? -10 : position === 'top' ? 10 : 0,
+      x: actualPosition === 'right' ? -10 : actualPosition === 'left' ? 10 : 0,
+      y: actualPosition === 'bottom' ? -10 : actualPosition === 'top' ? 10 : 0,
       filter: 'blur(10px)'
     },
     animate: { 
@@ -99,6 +167,7 @@ export const SmartTooltip: React.FC<SmartTooltipProps> = ({
     <AnimatePresence>
       {isVisible && (
         <motion.div
+          ref={tooltipRef}
           initial="initial"
           animate="animate"
           exit="exit"
@@ -107,17 +176,17 @@ export const SmartTooltip: React.FC<SmartTooltipProps> = ({
             position: 'fixed',
             left: coords.x,
             top: coords.y,
-            transform: position === 'right' || position === 'left' ? 'translateY(-50%)' : 'translateX(-50%)',
+            transform: actualPosition === 'right' || actualPosition === 'left' ? 'translateY(-50%)' : 'translateX(-50%)',
             zIndex: 99999,
             pointerEvents: 'none'
           }}
           className="flex items-center"
         >
           {/* Arrow */}
-          {position === 'right' && <div className="w-0 h-0 border-y-[6px] border-y-transparent border-r-[8px] border-r-primary/20 mr-[-1px]" />}
-          {position === 'left' && <div className="w-0 h-0 border-y-[6px] border-y-transparent border-l-[8px] border-l-primary/20 ml-[-1px] order-2" />}
-          {position === 'top' && <div className="w-0 h-0 border-x-[6px] border-x-transparent border-t-[8px] border-t-primary/20 mt-[-1px] order-2" />}
-          {position === 'bottom' && <div className="w-0 h-0 border-x-[6px] border-x-transparent border-b-[8px] border-b-primary/20 mb-[-1px]" />}
+          {actualPosition === 'right' && <div className="w-0 h-0 border-y-[6px] border-y-transparent border-r-[8px] border-r-primary/20 mr-[-1px]" />}
+          {actualPosition === 'left' && <div className="w-0 h-0 border-y-[6px] border-y-transparent border-l-[8px] border-l-primary/20 ml-[-1px] order-2" />}
+          {actualPosition === 'top' && <div className="w-0 h-0 border-x-[6px] border-x-transparent border-t-[8px] border-t-primary/20 mt-[-1px] order-2" />}
+          {actualPosition === 'bottom' && <div className="w-0 h-0 border-x-[6px] border-x-transparent border-b-[8px] border-b-primary/20 mb-[-1px]" />}
 
           <div className="bg-background/90 backdrop-blur-2xl border border-primary/30 rounded-xl p-3 shadow-[0_20px_50px_rgba(0,0,0,0.4)] min-w-[160px] relative overflow-hidden">
             {/* Decorative background glow */}
@@ -156,9 +225,9 @@ export const SmartTooltip: React.FC<SmartTooltipProps> = ({
   return (
     <div 
       ref={triggerRef}
-      onMouseEnter={() => setIsVisible(true)}
-      onMouseLeave={() => setIsVisible(false)}
-      onClick={() => setIsVisible(false)}
+      onMouseEnter={() => setActiveTooltipId(id)}
+      onMouseLeave={() => setActiveTooltipId(null)}
+      onClick={() => setActiveTooltipId(null)}
       className="relative inline-block"
     >
       {children}
