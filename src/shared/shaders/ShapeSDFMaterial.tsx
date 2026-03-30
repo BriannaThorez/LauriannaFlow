@@ -15,6 +15,7 @@ export const ShapeSDFVertexShader = `
   attribute float aIsSelected;
   attribute vec2 aSize;
   attribute float aOpacity;
+  attribute float aMaterial;
 
   varying vec2 vUv;
   varying vec3 vColor;
@@ -22,6 +23,7 @@ export const ShapeSDFVertexShader = `
   varying float vIsSelected;
   varying vec2 vSize;
   varying float vOpacity;
+  varying float vMaterial;
 
   void main() {
     vUv = uv;
@@ -30,6 +32,7 @@ export const ShapeSDFVertexShader = `
     vIsSelected = aIsSelected;
     vSize = aSize;
     vOpacity = aOpacity;
+    vMaterial = aMaterial;
   }
 `;
 
@@ -40,8 +43,27 @@ export const ShapeSDFFragmentShader = `
   varying float vIsSelected;
   varying vec2 vSize;
   varying float vOpacity;
+  varying float vMaterial;
   
   uniform float uTime;
+
+  // Procedural Noise for Surface Imperfections
+  float hash(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+  }
+
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    float a = hash(i);
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+  }
   
   float sdBox(vec2 p, vec2 b) {
     vec2 d = abs(p) - b;
@@ -128,8 +150,8 @@ export const ShapeSDFFragmentShader = `
     // Crisp edge (in world units)
     float edge = 1.0 - smoothstep(0.0, 0.2, d);
     
-    // Neon Glow - tight and crisp falloff
-    float glow = exp(-1.2 * max(d, 0.0));
+    // Neon Glow - tight and crisp falloff (only outside the shape)
+    float glow = exp(-1.2 * max(d, 0.0)) * (1.0 - edge);
     
     // Industry-Leading Dotted Selection Indicator
     // Use world units for the selection ring to keep it consistent
@@ -145,13 +167,24 @@ export const ShapeSDFFragmentShader = `
     vec3 selectionColor = vColor * (dottedOutline * 2.0 + dottedGlow * 0.8);
     
     // Base color for the shape itself
-    vec3 baseColor = mix(vColor * 0.1, vColor, edge);
-    float alpha = (edge + glow * 0.4 + dottedOutline + dottedGlow) * vOpacity;
+    vec3 baseColor = mix(vec3(0.0), vColor, edge);
+    
+    // Material specific logic
+    float isGlass = vMaterial; // 1.0 for glass, 0.0 for plastic
+    float surfaceNoise = noise(vUv * 50.0 + uTime * 0.05);
+    
+    // PBR Overrides
+    csm_Roughness = mix(0.6 + surfaceNoise * 0.1, 0.05 + surfaceNoise * 0.02, isGlass);
+    csm_Metalness = mix(0.0, 0.2, isGlass);
+    
+    // Opacity: Glass is 90% opaque, Plastic is 100%
+    float materialAlpha = mix(1.0, 0.9, isGlass);
+    float alpha = (edge + glow * 0.4 + dottedOutline + dottedGlow) * vOpacity * materialAlpha;
+    
     csm_DiffuseColor = vec4(baseColor, alpha);
     
-    // Emissive for the neon glow and selection effects
-    // This ensures the glow isn't affected by shadows/shading
-    vec3 glowColor = vColor * glow * (0.2 + 0.05 * sin(uTime * 2.0));
+    // Emissive for the neon glow and selection effects (removed inner pulse/glow so materials are visible)
+    vec3 glowColor = vColor * glow * 0.5;
     csm_Emissive = glowColor + selectionColor;
   }
 `;

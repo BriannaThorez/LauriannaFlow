@@ -1,0 +1,18 @@
+{
+  "neon_teal": {
+    "primary": "#22d3ee",
+    "secondary": "#0a0a0a",
+    "accent": "#22d3ee",
+    "neutral_light": "#ffffff",
+    "neutral_dark": "#050505",
+    "mode": "dark"
+  },
+  "cozy_cabin": {
+    "primary": "#8e735b",
+    "secondary": "#d4a373",
+    "accent": "#c8a279",
+    "neutral_light": "#f5f2ed",
+    "neutral_dark": "#2b1d0e",
+    "mode": "light"
+  }
+}

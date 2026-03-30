@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { useFlowchartStore, PortType } from '../shared/utils/store';
 import { Line } from '@react-three/drei';
 import * as THREE from 'three';
+import themes from '../shared/themes/color_palettes.json';
 
 const getPortPosition = (shape: any, port?: PortType): [number, number, number] => {
   const [x, y] = shape.position;
@@ -64,13 +66,25 @@ const getBezierPoints = (
 };
 
 export const FlowchartLinks = () => {
-  const { links, shapes, linkingFrom, linkingTo } = useFlowchartStore();
+  const links = useFlowchartStore(state => state.links);
+  const shapes = useFlowchartStore(state => state.shapes);
+  const linkingFrom = useFlowchartStore(state => state.linkingFrom);
+  const linkingTo = useFlowchartStore(state => state.linkingTo);
+  const themeName = useFlowchartStore(state => state.themeName);
+  const currentTheme = (themes as any)[themeName];
+
+  // Create a map for O(1) shape lookups
+  const shapeMap = useMemo(() => {
+    const map = new Map();
+    shapes.forEach(s => map.set(s.id, s));
+    return map;
+  }, [shapes]);
 
   return (
     <group>
       {links.map((link) => {
-        const fromShape = shapes.find((s) => s.id === link.from);
-        const toShape = shapes.find((s) => s.id === link.to);
+        const fromShape = shapeMap.get(link.from);
+        const toShape = shapeMap.get(link.to);
 
         if (!fromShape || !toShape) return null;
 
@@ -89,7 +103,7 @@ export const FlowchartLinks = () => {
           <Line
             key={link.id}
             points={points}
-            color="#39ff14" // Neon Green
+            color={currentTheme.primary}
             lineWidth={2}
             transparent
             opacity={0.8}
@@ -107,7 +121,7 @@ export const FlowchartLinks = () => {
             undefined,
             shapes.find(s => s.id === linkingFrom.id)?.rotation || 0
           )}
-          color="#22d3ee"
+          color={currentTheme.accent}
           lineWidth={1.5}
           dashed
           transparent

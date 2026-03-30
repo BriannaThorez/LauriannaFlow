@@ -20,29 +20,53 @@ import { FlowchartCanvas } from './widgets/FlowchartCanvas';
 import { Toolbar } from './widgets/Toolbar';
 import { ControlsHint } from './widgets/ControlsHint';
 import { useFlowchartStore } from './shared/utils/store';
-import themes from '../themes/color_palettes.json';
+import themes from './shared/themes/color_palettes.json';
 
 export default function App() {
-  const { 
-    setActiveTool, 
-    undo, 
-    redo, 
-    resetCamera, 
-    editingId,
-    setEditingId,
-    setSelectedId,
-    mode,
-    themeName
-  } = useFlowchartStore();
+  const setActiveTool = useFlowchartStore(state => state.setActiveTool);
+  const undo = useFlowchartStore(state => state.undo);
+  const redo = useFlowchartStore(state => state.redo);
+  const resetCamera = useFlowchartStore(state => state.resetCamera);
+  const editingId = useFlowchartStore(state => state.editingId);
+  const setEditingId = useFlowchartStore(state => state.setEditingId);
+  const setSelectedId = useFlowchartStore(state => state.setSelectedId);
+  const mode = useFlowchartStore(state => state.mode);
+  const themeName = useFlowchartStore(state => state.themeName);
 
   useEffect(() => {
     const theme = (themes as any)[themeName];
     if (theme) {
       const root = document.documentElement;
-      Object.entries(theme).forEach(([key, value]) => {
-        root.style.setProperty(`--${key}`, value as string);
-        
-        // Extract RGB for shadows/transparency
+      
+      // Set the 5 core colors
+      root.style.setProperty('--primary', theme.primary);
+      root.style.setProperty('--secondary', theme.secondary);
+      root.style.setProperty('--accent', theme.accent);
+      root.style.setProperty('--neutral-light', theme.neutral_light);
+      root.style.setProperty('--neutral-dark', theme.neutral_dark);
+      
+      // Derived semantic roles
+      const isDark = theme.mode === 'dark';
+      const background = isDark ? theme.neutral_dark : theme.neutral_light;
+      const text = isDark ? theme.neutral_light : theme.neutral_dark;
+      
+      root.style.setProperty('--background', background);
+      root.style.setProperty('--text', text);
+      root.style.setProperty('--highlight', theme.accent);
+      
+      // Extract RGB for all colors for shadows/transparency
+      const colors = {
+        primary: theme.primary,
+        secondary: theme.secondary,
+        accent: theme.accent,
+        'neutral-light': theme.neutral_light,
+        'neutral-dark': theme.neutral_dark,
+        background,
+        text,
+        highlight: theme.accent
+      };
+
+      Object.entries(colors).forEach(([key, value]) => {
         if (typeof value === 'string' && value.startsWith('#')) {
           const r = parseInt(value.slice(1, 3), 16);
           const g = parseInt(value.slice(3, 5), 16);
@@ -50,6 +74,14 @@ export default function App() {
           root.style.setProperty(`--${key}-rgb`, `${r}, ${g}, ${b}`);
         }
       });
+      
+      // Set the color-scheme property for browser UI
+      root.style.setProperty('color-scheme', theme.mode);
+      if (isDark) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
     }
   }, [themeName]);
 

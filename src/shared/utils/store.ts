@@ -19,7 +19,9 @@ export interface Shape {
   size: [number, number];
   vertices: [number, number][]; // Relative to position
   text?: string;
-  color?: string;
+  color?: string; // Legacy/Override
+  themeColors?: Record<string, string>; // themeName -> hexColor
+  material?: 'plastic' | 'glass';
   rotation?: number; // in radians
 }
 
@@ -40,7 +42,7 @@ export interface FlowchartState {
   linkingTo: [number, number] | null;
   
   addShape: (shape: Shape) => void;
-  updateShape: (id: string, updates: Partial<Shape>) => void;
+  updateShape: (id: string, updates: Partial<Shape>, skipHistory?: boolean) => void;
   deleteShape: (id: string) => void;
   addLink: (from: string, to: string, fromPort?: PortType, toPort?: PortType) => void;
   setActiveTool: (tool: FlowchartState['activeTool']) => void;
@@ -56,6 +58,7 @@ export interface FlowchartState {
   resolveAllOverlaps: () => void;
   undo: () => void;
   redo: () => void;
+  pushToHistory: () => void;
   resetCamera: () => void;
   shouldResetCamera: boolean;
   setShouldResetCamera: (val: boolean) => void;
@@ -78,17 +81,45 @@ export interface FlowchartState {
   setThemeName: (name: string) => void;
 }
 
+const getAABB = (shape: Shape) => {
+  const rotation = shape.rotation || 0;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  
+  for (const [vx, vy] of shape.vertices) {
+    const rx = vx * cos - vy * sin;
+    const ry = vx * sin + vy * cos;
+    minX = Math.min(minX, rx);
+    maxX = Math.max(maxX, rx);
+    minY = Math.min(minY, ry);
+    maxY = Math.max(maxY, ry);
+  }
+  
+  return {
+    w: maxX - minX,
+    h: maxY - minY,
+    cx: (minX + maxX) / 2,
+    cy: (minY + maxY) / 2
+  };
+};
+
 const checkOverlap = (s1: Shape, s2: Shape) => {
-  const [x1, y1] = s1.position;
-  const [w1, h1] = s1.size;
-  const [x2, y2] = s2.position;
-  const [w2, h2] = s2.size;
+  const aabb1 = getAABB(s1);
+  const aabb2 = getAABB(s2);
+
+  const cx1 = s1.position[0] + aabb1.cx;
+  const cy1 = s1.position[1] + aabb1.cy;
+  const cx2 = s2.position[0] + aabb2.cx;
+  const cy2 = s2.position[1] + aabb2.cy;
 
   // Add a small padding to prevent perfectly touching edges from being considered overlapping if desired,
   // but here we use strict AABB.
   return (
-    Math.abs(x1 - x2) < (w1 + w2) / 2 - 0.1 &&
-    Math.abs(y1 - y2) < (h1 + h2) / 2 - 0.1
+    Math.abs(cx1 - cx2) < (aabb1.w + aabb2.w) / 2 - 0.1 &&
+    Math.abs(cy1 - cy2) < (aabb1.h + aabb2.h) / 2 - 0.1
   );
 };
 
@@ -172,13 +203,31 @@ export const useFlowchartStore = create<FlowchartState>((set, get) => {
         return { shapes: [...state.shapes, { ...shape, position: safePos }] };
       });
     },
-    updateShape: (id, updates) => {
-      // For position updates, we might want to be careful not to spam history.
-      // But for now, let's just push.
-      pushToHistory();
-      set((state) => ({
-        shapes: state.shapes.map(s => s.id === id ? { ...s, ...updates } : s)
-      }));
+    updateShape: (id, updates, skipHistory = false) => {
+      if (!skipHistory) {
+        pushToHistory();
+      }
+      set((state) => {
+        return {
+          shapes: state.shapes.map(s => {
+            if (s.id === id) {
+              const newShape = { ...s, ...updates };
+              // If size was updated, update vertices to match the new size
+              if (updates.size && (!s.size || updates.size[0] !== s.size[0] || updates.size[1] !== s.size[1])) {
+                const [w, h] = updates.size;
+                newShape.vertices = [
+                  [-w / 2, -h / 2],
+                  [w / 2, -h / 2],
+                  [w / 2, h / 2],
+                  [-w / 2, h / 2]
+                ];
+              }
+              return newShape;
+            }
+            return s;
+          })
+        };
+      });
     },
     deleteShape: (id) => {
       pushToHistory();
@@ -217,7 +266,18 @@ export const useFlowchartStore = create<FlowchartState>((set, get) => {
       }
       set({ isDragging });
     },
-    setIsRotating: (isRotating) => set({ isRotating }),
+    setIsRotating: (isRotating) => {
+      const state = get();
+      if (!isRotating && state.isRotating && state.selectedId) {
+        // Finalize position on drop
+        const shape = state.shapes.find(s => s.id === state.selectedId);
+        if (shape) {
+          const safePos = findBestPosition(shape, state.shapes);
+          state.updateShape(shape.id, { position: safePos });
+        }
+      }
+      set({ isRotating });
+    },
     setIsPanning: (isPanning) => set({ isPanning }),
     setDragOffset: (dragOffset) => set({ dragOffset }),
     setLinkingFrom: (linkingFrom) => set({ linkingFrom }),
@@ -257,6 +317,7 @@ export const useFlowchartStore = create<FlowchartState>((set, get) => {
         set({ shapes: next.shapes, links: next.links });
       }
     },
+    pushToHistory: () => pushToHistory(),
     resetCamera: () => set({ shouldResetCamera: true }),
     setShouldResetCamera: (val) => set({ shouldResetCamera: val }),
     
@@ -274,7 +335,7 @@ export const useFlowchartStore = create<FlowchartState>((set, get) => {
     requestCameraMove: (cameraMoveRequest) => set({ cameraMoveRequest }),
     
     // Theme state
-    themeName: 'neon_teal',
+    themeName: 'cozy_cabin',
     setThemeName: (themeName) => set({ themeName }),
   };
 });

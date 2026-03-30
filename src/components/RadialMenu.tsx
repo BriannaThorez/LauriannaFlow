@@ -1,23 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useFlowchartStore } from '../shared/utils/store';
 import { getMenuOffset } from '../shared/utils/layout';
-import { Palette, Trash2, Type, MoreHorizontal, Mouse } from 'lucide-react';
+import { Palette, Trash2, Type, MoreHorizontal, Mouse, GlassWater, Box } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import themes from '../shared/themes/color_palettes.json';
 
 interface RadialMenuProps {
   shapeId: string;
 }
 
-const COLORS = [
-  '#22d3ee', // Cyan
-  '#39ff14', // Neon Green
-  '#ff00ff', // Magenta
-  '#ffff00', // Yellow
-  '#ff4d00', // Orange
-  '#ffffff', // White
-];
-
-type MenuType = 'main' | 'color';
+type MenuType = 'main' | 'color' | 'material';
 
 interface MenuItemProps {
   id: string;
@@ -31,7 +23,7 @@ interface MenuItemProps {
 }
 
 const MenuItem = React.memo(({ icon, label, action, index, total, radius, color }: MenuItemProps) => {
-  const { setIsPanning } = useFlowchartStore();
+  const setIsPanning = useFlowchartStore(state => state.setIsPanning);
   const pointerStartRef = useRef<{ x: number, y: number } | null>(null);
   const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
   const x = Math.cos(angle) * radius;
@@ -71,7 +63,7 @@ const MenuItem = React.memo(({ icon, label, action, index, total, radius, color 
       className={`absolute w-40 h-40 -ml-20 -mt-20 rounded-full border flex flex-col items-center justify-center shadow-lg transition-all group will-change-transform ${
         color 
           ? 'border-white/30 hover:scale-125 hover:border-white' 
-          : 'bg-secondary border-primary/40 text-primary hover:bg-primary hover:text-background hover:border-white'
+          : 'bg-background border-text/20 text-text hover:bg-primary hover:text-background hover:border-accent'
       }`}
       style={color ? { backgroundColor: color, boxShadow: `0 0 60px ${color}66` } : {}}
     >
@@ -79,7 +71,7 @@ const MenuItem = React.memo(({ icon, label, action, index, total, radius, color 
         {icon}
       </div>
       {label && (
-        <span className="absolute -bottom-28 left-1/2 -translate-x-1/2 text-[36px] font-bold uppercase tracking-[0.2em] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-primary">
+        <span className="absolute -bottom-28 left-1/2 -translate-x-1/2 text-[36px] font-bold uppercase tracking-[0.2em] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-text drop-shadow-[0_0_10px_var(--background)]">
           {label}
         </span>
       )}
@@ -90,8 +82,22 @@ const MenuItem = React.memo(({ icon, label, action, index, total, radius, color 
 export const RadialMenu: React.FC<RadialMenuProps> = ({ shapeId }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [menuStack, setMenuStack] = useState<MenuType[]>(['main']);
-  const { updateShape, deleteShape, shapes, setSelectedId, setIsPanning } = useFlowchartStore();
+  const updateShape = useFlowchartStore(state => state.updateShape);
+  const deleteShape = useFlowchartStore(state => state.deleteShape);
+  const shapes = useFlowchartStore(state => state.shapes);
+  const setSelectedId = useFlowchartStore(state => state.setSelectedId);
+  const setIsPanning = useFlowchartStore(state => state.setIsPanning);
+  const themeName = useFlowchartStore(state => state.themeName);
   
+  const currentTheme = useMemo(() => (themes as any)[themeName], [themeName]);
+  const themeColors = useMemo(() => [
+    currentTheme.primary,
+    currentTheme.secondary,
+    currentTheme.accent,
+    currentTheme.neutral_light,
+    currentTheme.neutral_dark,
+  ], [currentTheme]);
+
   const activeMenu = menuStack[menuStack.length - 1];
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -172,15 +178,28 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({ shapeId }) => {
   }, [isOpen, goBack]);
 
   const handleColorSelect = useCallback((color: string) => {
-    updateShape(shapeId, { color });
+    const shape = shapes.find(s => s.id === shapeId);
+    const newThemeColors = { ...(shape?.themeColors || {}), [themeName]: color };
+    updateShape(shapeId, { themeColors: newThemeColors, color }); // color as fallback
+    setIsOpen(false);
+  }, [shapeId, updateShape, themeName, shapes]);
+
+  const handleMaterialSelect = useCallback((material: 'plastic' | 'glass') => {
+    updateShape(shapeId, { material });
     setIsOpen(false);
   }, [shapeId, updateShape]);
 
   const mainItems = useMemo(() => [
     { id: 'color', icon: <Palette size={18} />, label: 'Color', action: () => setMenuStack(prev => [...prev, 'color']) },
+    { id: 'material', icon: <GlassWater size={18} />, label: 'Material', action: () => setMenuStack(prev => [...prev, 'material']) },
     { id: 'delete', icon: <Trash2 size={18} />, label: 'Delete', action: () => deleteShape(shapeId) },
     { id: 'text', icon: <Type size={18} />, label: 'Edit', action: () => useFlowchartStore.getState().setEditingId(shapeId) },
   ], [shapeId, deleteShape]);
+
+  const materialItems = useMemo(() => [
+    { id: 'plastic', icon: <Box size={18} />, label: 'Matte Plastic', action: () => handleMaterialSelect('plastic') },
+    { id: 'glass', icon: <GlassWater size={18} />, label: 'Polished Glass', action: () => handleMaterialSelect('glass') },
+  ], [handleMaterialSelect]);
 
   const radius = 240;
 
@@ -196,16 +215,16 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({ shapeId }) => {
     >
       {/* Main Trigger Button - Centered on anchor */}
       <motion.button
-        whileHover={{ scale: 1.1, boxShadow: '0 0 100px rgba(var(--primary-rgb),0.8)' }}
+        whileHover={{ scale: 1.1, boxShadow: '0 0 100px rgba(var(--accent-rgb),0.8)' }}
         whileTap={{ scale: 0.9 }}
         onPointerDown={handleTriggerPointerDown}
         onPointerUp={handleTriggerPointerUp}
         className={`absolute w-40 h-40 -ml-20 -mt-20 rounded-full bg-background border-[8px] flex items-center justify-center transition-all duration-300 ${
-          isOpen ? 'border-white text-white' : 'border-primary text-primary'
-        } shadow-[0_0_80px_rgba(var(--primary-rgb),0.4)] z-20`}
+          isOpen ? 'border-accent text-accent shadow-[0_20px_50px_rgba(0,0,0,0.4)]' : 'border-text/20 text-text shadow-[0_20px_50px_rgba(0,0,0,0.4)]'
+        } z-20`}
       >
         <div className="scale-[4]">
-          {isOpen ? <Mouse size={20} className="text-white" /> : <MoreHorizontal size={22} />}
+          {isOpen ? <Mouse size={20} className="text-accent" /> : <MoreHorizontal size={22} className="text-text" />}
         </div>
       </motion.button>
 
@@ -231,7 +250,7 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({ shapeId }) => {
               />
             ))}
 
-            {activeMenu === 'color' && COLORS.map((color, index) => (
+            {activeMenu === 'color' && themeColors.map((color, index) => (
               <MenuItem 
                 key={color}
                 id={color}
@@ -239,7 +258,17 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({ shapeId }) => {
                 color={color}
                 action={() => handleColorSelect(color)}
                 index={index}
-                total={COLORS.length}
+                total={themeColors.length}
+                radius={radius}
+              />
+            ))}
+
+            {activeMenu === 'material' && materialItems.map((item, index) => (
+              <MenuItem 
+                key={item.id}
+                {...item}
+                index={index}
+                total={materialItems.length}
                 radius={radius}
               />
             ))}

@@ -1,9 +1,13 @@
 import { Shape, Link, PortType } from './store';
 
-export const generateSVG = (shapes: Shape[], links: Link[]): string => {
+export const generateSVG = (shapes: Shape[], links: Link[], theme: any): string => {
   if (shapes.length === 0) {
     return '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"></svg>';
   }
+
+  const bgColor = theme.neutral_dark || '#050505';
+  const primaryColor = theme.primary || '#22d3ee';
+  const textColor = theme.mode === 'dark' ? '#ffffff' : '#000000';
 
   // Calculate bounding box
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -43,7 +47,7 @@ export const generateSVG = (shapes: Shape[], links: Link[]): string => {
   const svgLines = [
     '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
     `<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">`,
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width * 10}" height="${height * 10}" style="background-color: #050505;">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width * 10}" height="${height * 10}" style="background-color: ${bgColor};">`,
     '  <defs>',
     '    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">',
     '      <feGaussianBlur stdDeviation="1.5" result="blur1" />',
@@ -57,13 +61,13 @@ export const generateSVG = (shapes: Shape[], links: Link[]): string => {
     '    <style type="text/css">',
     '      <![CDATA[',
     "        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');",
-    '        .shape { fill: #06202a; fill-opacity: 0.95; stroke: #22d3ee; stroke-width: 0.4; filter: url(#glow); }',
-    '        .link { fill: none; stroke: #22d3ee; stroke-width: 0.25; stroke-dasharray: 0.8, 0.8; filter: url(#glow); opacity: 0.8; }',
-    "        .text { fill: #ffffff; font-family: 'Inter', sans-serif; font-size: 2.5px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }",
+    `        .shape { fill: ${bgColor}; fill-opacity: 0.95; stroke: ${primaryColor}; stroke-width: 0.4; filter: url(#glow); }`,
+    `        .link { fill: none; stroke: ${primaryColor}; stroke-width: 0.25; stroke-dasharray: 0.8, 0.8; filter: url(#glow); opacity: 0.8; }`,
+    `        .text { fill: ${textColor}; font-family: 'Inter', sans-serif; font-size: 2.5px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }`,
     '      ]]>',
     '    </style>',
     '  </defs>',
-    `  <rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="#050505" />`,
+    `  <rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="${bgColor}" />`,
   ];
 
   // Draw links

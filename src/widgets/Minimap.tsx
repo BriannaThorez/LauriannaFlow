@@ -115,7 +115,7 @@ export const Minimap: React.FC = () => {
   return (
     <div 
       id="minimap-container"
-      className="w-48 h-48 bg-background/80 backdrop-blur-xl border border-primary/10 rounded-xl overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.6)] pointer-events-auto group transition-all duration-300 hover:border-primary/40"
+      className="w-48 h-48 bg-background/95 backdrop-blur-xl border border-text/10 rounded-xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.4)] pointer-events-auto group transition-all duration-300 hover:border-primary/40"
       onWheel={handleWheel}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -150,7 +150,7 @@ export const Minimap: React.FC = () => {
             height="100" 
             patternUnits="userSpaceOnUse"
           >
-            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="var(--primary)" strokeOpacity="0.12" strokeWidth="2" />
+            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="var(--text)" strokeOpacity="0.12" strokeWidth="2" />
           </pattern>
         </defs>
         
@@ -204,9 +204,9 @@ export const Minimap: React.FC = () => {
           y={-viewport.y - viewport.height}
           width={viewport.width}
           height={viewport.height}
-          fill="var(--primary)"
+          fill="var(--accent)"
           fillOpacity="0.15"
-          stroke="var(--text)"
+          stroke="var(--accent)"
           strokeWidth={2 / localZoom}
           strokeDasharray={`${4 / localZoom} ${2 / localZoom}`}
           opacity="0.9"
@@ -216,14 +216,14 @@ export const Minimap: React.FC = () => {
       
       {/* HUD Overlay */}
       <div className="absolute top-2 left-2 flex items-center gap-1.5 pointer-events-none">
-        <Map size={12} className="text-primary drop-shadow-[0_0_8px_var(--primary)]" />
+        <Map size={12} className="text-text drop-shadow-[0_0_8px_var(--primary)]" />
       </div>
 
       <div className="absolute bottom-2 left-2 flex items-center gap-2 pointer-events-none">
-        <span className="text-[8px] font-mono text-text/40 uppercase tracking-widest">
+        <span className="text-[8px] font-mono text-text/60 uppercase tracking-widest">
           Z:{localZoom.toFixed(2)}
         </span>
-        <span className="text-[8px] font-mono text-text/20 uppercase tracking-widest">
+        <span className="text-[8px] font-mono text-text/40 uppercase tracking-widest">
           {cameraState.zoom.toFixed(1)}x
         </span>
       </div>
@@ -233,7 +233,7 @@ export const Minimap: React.FC = () => {
         <SmartTooltip content="Recenter Minimap" description="Align the minimap center with the current camera viewport." position="left">
           <button 
             onClick={() => setLocalCenter([cameraState.position[0], cameraState.position[1]])}
-            className="p-1 rounded bg-text/5 border border-text/10 hover:bg-primary/20 hover:border-primary/40 transition-all group/btn"
+            className="p-1 rounded bg-secondary/20 border border-primary/10 hover:bg-primary/20 hover:border-primary/40 transition-all group/btn"
           >
             <div className="w-2 h-2 border border-primary/60 group-hover/btn:border-primary" />
           </button>
@@ -241,10 +241,10 @@ export const Minimap: React.FC = () => {
       </div>
 
       {/* Decorative corners */}
-      <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-primary/40" />
-      <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-primary/40" />
-      <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-primary/40" />
-      <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-primary/40" />
+      <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-accent/40" />
+      <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-accent/40" />
+      <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-accent/40" />
+      <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-accent/40" />
     </div>
   );
 };

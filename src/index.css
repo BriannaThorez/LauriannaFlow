@@ -4,16 +4,23 @@
   --color-background: var(--background);
   --color-primary: var(--primary);
   --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
   --color-text: var(--text);
   --color-highlight: var(--highlight);
+  --color-neutral-light: var(--neutral-light);
+  --color-neutral-dark: var(--neutral-dark);
 }
 
 :root {
-  --background: #050505;
   --primary: #22d3ee;
   --secondary: #0a0a0a;
-  --text: #ffffff;
-  --highlight: #22d3ee;
+  --accent: #22d3ee;
+  --neutral-light: #ffffff;
+  --neutral-dark: #050505;
+  
+  --background: var(--neutral-dark);
+  --text: var(--neutral-light);
+  --highlight: var(--accent);
 }
 
 body {

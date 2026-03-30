@@ -114,27 +114,27 @@ export const SmartTooltip: React.FC<SmartTooltipProps> = ({
           className="flex items-center"
         >
           {/* Arrow */}
-          {position === 'right' && <div className="w-0 h-0 border-y-[6px] border-y-transparent border-r-[8px] border-r-cyan-500/20 mr-[-1px]" />}
-          {position === 'left' && <div className="w-0 h-0 border-y-[6px] border-y-transparent border-l-[8px] border-l-cyan-500/20 ml-[-1px] order-2" />}
-          {position === 'top' && <div className="w-0 h-0 border-x-[6px] border-x-transparent border-t-[8px] border-t-cyan-500/20 mt-[-1px] order-2" />}
-          {position === 'bottom' && <div className="w-0 h-0 border-x-[6px] border-x-transparent border-b-[8px] border-b-cyan-500/20 mb-[-1px]" />}
+          {position === 'right' && <div className="w-0 h-0 border-y-[6px] border-y-transparent border-r-[8px] border-r-primary/20 mr-[-1px]" />}
+          {position === 'left' && <div className="w-0 h-0 border-y-[6px] border-y-transparent border-l-[8px] border-l-primary/20 ml-[-1px] order-2" />}
+          {position === 'top' && <div className="w-0 h-0 border-x-[6px] border-x-transparent border-t-[8px] border-t-primary/20 mt-[-1px] order-2" />}
+          {position === 'bottom' && <div className="w-0 h-0 border-x-[6px] border-x-transparent border-b-[8px] border-b-primary/20 mb-[-1px]" />}
 
-          <div className="bg-black/90 backdrop-blur-2xl border border-cyan-500/30 rounded-xl p-3 shadow-[0_10px_40px_rgba(0,0,0,0.9)] min-w-[160px] relative overflow-hidden">
+          <div className="bg-background/90 backdrop-blur-2xl border border-primary/30 rounded-xl p-3 shadow-[0_20px_50px_rgba(0,0,0,0.4)] min-w-[160px] relative overflow-hidden">
             {/* Decorative background glow */}
-            <div className="absolute -top-10 -right-10 w-20 h-20 bg-cyan-500/10 blur-3xl rounded-full" />
+            <div className="absolute -top-10 -right-10 w-20 h-20 bg-primary/10 blur-3xl rounded-full" />
             
             <div className="flex flex-col gap-1.5 relative z-10">
               <div className="flex items-center justify-between gap-4">
-                <span className="text-[11px] font-bold text-white tracking-tight uppercase">{content}</span>
+                <span className="text-[11px] font-bold text-text tracking-tight uppercase">{content}</span>
                 {shortcut && (
-                  <span className="px-1.5 py-0.5 rounded bg-white/10 border border-white/5 text-[9px] font-mono text-cyan-400 font-bold">
+                  <span className="px-1.5 py-0.5 rounded bg-text/10 border border-text/5 text-[9px] font-mono text-primary font-bold">
                     {shortcut}
                   </span>
                 )}
               </div>
               
               {description && (
-                <p className="text-[10px] text-white/50 leading-relaxed font-medium max-w-[180px]">
+                <p className="text-[10px] text-text/50 leading-relaxed font-medium max-w-[180px]">
                   {description}
                 </p>
               )}
@@ -145,7 +145,7 @@ export const SmartTooltip: React.FC<SmartTooltipProps> = ({
               initial={{ scaleX: 0 }}
               animate={{ scaleX: 1 }}
               transition={{ delay: 0.1, duration: 0.4 }}
-              className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent origin-center"
+              className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/40 to-transparent origin-center"
             />
           </div>
         </motion.div>

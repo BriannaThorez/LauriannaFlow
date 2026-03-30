@@ -19,18 +19,17 @@ UI themes are not just collections of colors; they are systems of functional rol
 
 Given a 5-color palette (Left to Right: 1, 2, 3, 4, 5):
 
-### Step A: Luminance Sorting
-1. **Color 2 (Lightest):** High L. Ideal for Text (in dark mode) or Background (in light mode).
-2. **Color 5 (Darkest):** Low L. Ideal for Background (in dark mode).
-3. **Colors 1, 3, 4:** Mid-tones.
+### Step A: Theme Mode Determination
+1. **Analyze Image Background:** The area surrounding the palette bars.
+2. **Result:** If the background is **White**, the theme is **Light Mode**. If the background is **Black**, the theme is **Dark Mode**.
+3. **Cozy Cabin Case:** The image background is white, therefore it is a **Light Mode** theme.
 
-### Step B: Saturation & Warmth Analysis
-- **Color 4:** Highest warmth/saturation. It draws the eye immediately. **Role: Highlight.**
-- **Color 3:** Solid mid-tone with strong "cabin" character. **Role: Primary.**
-- **Color 1:** Muted, desaturated olive-brown. **Role: Secondary.**
-
-### Step C: Contrast Verification
-- **Background (5) vs. Text (2):** Dark Charcoal vs. Light Taupe. This provides excellent readability and reduces eye strain.
+### Step B: Luminance Sorting & Role Assignment
+1. **Background (Base):** In Light Mode, assign the **Lightest color** (Color 2: #c3bbb3) to `background`.
+2. **Text (Ink):** In Light Mode, assign the **Darkest color** (Color 5: #403b3a) to `text`.
+3. **Primary (Brand):** The core identity (Color 3: #8e735b).
+4. **Secondary (Muted):** Supporting tone (Color 1: #7a746a).
+5. **Highlight (Accent):** The "Pop" (Color 4: #c8a279).
 
 ---
 
