@@ -1,33 +1,47 @@
 import * as THREE from 'three';
-import { shaderMaterial } from '@react-three/drei';
-import { extend } from '@react-three/fiber';
 
-const ShapeSDFMaterial = shaderMaterial(
-  {
-    uColor: new THREE.Color('#22d3ee'),
-    uShapeType: 0.0, // 0: Box, 1: Diamond, 2: Circle
-    uTime: 0.0,
-    uOpacity: 1.0,
-    uIsSelected: 0.0,
-    uSize: new THREE.Vector2(20, 15),
-  },
-  // Vertex Shader
-  `
+export const ShapeSDFUniforms = {
+  uColor: new THREE.Color('#22d3ee'),
+  uShapeType: 0.0,
+  uTime: 0.0,
+  uOpacity: 1.0,
+  uIsSelected: 0.0,
+  uSize: new THREE.Vector2(20, 15),
+};
+
+export const ShapeSDFVertexShader = `
+  attribute vec3 aColor;
+  attribute float aShapeType;
+  attribute float aIsSelected;
+  attribute vec2 aSize;
+  attribute float aOpacity;
+
   varying vec2 vUv;
+  varying vec3 vColor;
+  varying float vShapeType;
+  varying float vIsSelected;
+  varying vec2 vSize;
+  varying float vOpacity;
+
   void main() {
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vColor = aColor;
+    vShapeType = aShapeType;
+    vIsSelected = aIsSelected;
+    vSize = aSize;
+    vOpacity = aOpacity;
   }
-  `,
-  // Fragment Shader
-  `
+`;
+
+export const ShapeSDFFragmentShader = `
   varying vec2 vUv;
-  uniform vec3 uColor;
-  uniform float uShapeType;
+  varying vec3 vColor;
+  varying float vShapeType;
+  varying float vIsSelected;
+  varying vec2 vSize;
+  varying float vOpacity;
+  
   uniform float uTime;
-  uniform float uOpacity;
-  uniform float uIsSelected;
-  uniform vec2 uSize;
   
   float sdBox(vec2 p, vec2 b) {
     vec2 d = abs(p) - b;
@@ -86,26 +100,26 @@ const ShapeSDFMaterial = shaderMaterial(
   
   void main() {
     // Calculate position in world units relative to center
-    vec2 p = (vUv - 0.5) * uSize;
+    vec2 p = (vUv - 0.5) * vSize;
     float d = 1e10;
     
-    // Shape size is derived from uSize, leaving a margin for the glow
-    // We assume the intended visual size is uSize - 12.0 (6 units padding on each side)
-    vec2 shapeSize = max(uSize - 12.0, vec2(2.0));
+    // Shape size is derived from vSize, leaving a margin for the glow
+    // We assume the intended visual size is vSize - 12.0 (6 units padding on each side)
+    vec2 shapeSize = max(vSize - 12.0, vec2(2.0));
     
-    if (uShapeType < 0.5) {
+    if (vShapeType < 0.5) {
       d = sdBox(p, shapeSize * 0.5);
-    } else if (uShapeType < 1.5) {
+    } else if (vShapeType < 1.5) {
       d = sdDiamond(p, shapeSize.x * 0.4);
-    } else if (uShapeType < 2.5) {
+    } else if (vShapeType < 2.5) {
       d = sdCircle(p, shapeSize.y * 0.4);
-    } else if (uShapeType < 3.5) {
+    } else if (vShapeType < 3.5) {
       d = sdParallelogram(p, shapeSize.x * 0.4, shapeSize.y * 0.4, shapeSize.x * 0.1);
-    } else if (uShapeType < 4.5) {
+    } else if (vShapeType < 4.5) {
       d = sdBox(p, shapeSize * 0.4); // Cylinder fallback for now
-    } else if (uShapeType < 5.5) {
+    } else if (vShapeType < 5.5) {
       d = sdDocument(p, shapeSize * 0.4);
-    } else if (uShapeType < 6.5) {
+    } else if (vShapeType < 6.5) {
       d = sdHexagon(p, shapeSize.y * 0.4);
     } else {
       d = sdTrapezoid(p, shapeSize.x * 0.4, shapeSize.x * 0.3, shapeSize.y * 0.4);
@@ -122,23 +136,22 @@ const ShapeSDFMaterial = shaderMaterial(
     float angle = atan(p.y, p.x);
     float dotPattern = smoothstep(0.4, 0.6, fract(angle * 1.91 - uTime * 1.2)); 
     float selectionRing = smoothstep(0.4, 0.0, abs(d - 0.8));
-    float dottedOutline = uIsSelected * selectionRing * dotPattern;
+    float dottedOutline = vIsSelected * selectionRing * dotPattern;
     
     // Soft glow for the dots
-    float dottedGlow = uIsSelected * exp(-2.0 * abs(d - 0.8)) * dotPattern;
+    float dottedGlow = vIsSelected * exp(-2.0 * abs(d - 0.8)) * dotPattern;
 
-    vec3 finalColor = mix(uColor * 0.1, uColor, edge);
-    // Subtle breathing glow
-    finalColor += uColor * glow * (0.2 + 0.05 * sin(uTime * 2.0));
+    // Selection effects
+    vec3 selectionColor = vColor * (dottedOutline * 2.0 + dottedGlow * 0.8);
     
-    // Add selection effects
-    finalColor += uColor * dottedOutline * 2.0;
-    finalColor += uColor * dottedGlow * 0.8;
+    // Base color for the shape itself
+    vec3 baseColor = mix(vColor * 0.1, vColor, edge);
+    float alpha = (edge + glow * 0.4 + dottedOutline + dottedGlow) * vOpacity;
+    csm_DiffuseColor = vec4(baseColor, alpha);
     
-    float alpha = (edge + glow * 0.4 + dottedOutline + dottedGlow) * uOpacity;
-    gl_FragColor = vec4(finalColor, alpha);
+    // Emissive for the neon glow and selection effects
+    // This ensures the glow isn't affected by shadows/shading
+    vec3 glowColor = vColor * glow * (0.2 + 0.05 * sin(uTime * 2.0));
+    csm_Emissive = glowColor + selectionColor;
   }
-  `
-);
-
-extend({ ShapeSDFMaterial });
+`;

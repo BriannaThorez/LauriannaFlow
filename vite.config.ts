@@ -6,9 +6,6 @@ import {defineConfig, loadEnv} from 'vite';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    // ADD THIS LINE BELOW (Replace YOUR_REPO_NAME with your repo's name)
-    base: '/LauriannaFlow/', 
-    
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),

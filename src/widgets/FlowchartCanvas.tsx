@@ -1,5 +1,5 @@
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, Grid } from '@react-three/drei';
+import { OrbitControls, Grid, Environment } from '@react-three/drei';
 import { EffectComposer, Bloom, ChromaticAberration, Noise, Vignette } from '@react-three/postprocessing';
 import { FlowchartNodes } from '../entities/FlowchartNodes';
 import { FlowchartLinks } from '../entities/FlowchartLinks';
@@ -335,7 +335,9 @@ const FlowchartCanvasInner = () => {
   return (
     <>
       <color attach="background" args={['#050505']} />
-      <ambientLight intensity={1.0} />
+      <ambientLight intensity={0.5} />
+      <directionalLight position={[10, 10, 10]} intensity={1.5} castShadow />
+      <Environment preset="city" />
       
       <OrbitControls 
         makeDefault 

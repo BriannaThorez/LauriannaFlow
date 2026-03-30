@@ -45,9 +45,9 @@ export const Toolbar = () => {
   };
 
   return (
-    <div className="absolute top-4 left-4 flex flex-col gap-4 items-start z-[100]">
+    <div className="absolute top-4 left-4 flex flex-col gap-4 items-start z-50">
       {/* Mode Switcher & Export */}
-      <div className="bg-background/60 backdrop-blur-xl p-1.5 rounded-xl border border-primary/10 flex gap-1.5 shadow-2xl items-center">
+      <div className="bg-background/60 backdrop-blur-xl p-1.5 rounded-xl border border-primary/10 flex gap-1.5 shadow-2xl items-center relative z-50">
         <SmartTooltip content="Studio Mode" description="Full creative control. Create, edit, and link nodes." position="bottom">
           <button
             onClick={() => setMode('studio')}
@@ -81,7 +81,7 @@ export const Toolbar = () => {
           {showThemeMenu && (
             <div 
               onMouseLeave={() => setShowThemeMenu(false)}
-              className="absolute top-full mt-2 left-0 bg-background/90 backdrop-blur-2xl border border-primary/10 rounded-xl p-2 shadow-2xl flex flex-col gap-1 min-w-[160px] z-[110]"
+              className="absolute top-full mt-2 left-0 bg-background/90 backdrop-blur-2xl border border-primary/10 rounded-xl p-2 shadow-2xl flex flex-col gap-1 min-w-[160px] z-[100]"
             >
               <div className="px-2 py-1 border-b border-primary/5 mb-1">
                 <span className="text-[8px] font-mono text-primary/20 uppercase tracking-widest">Select Theme</span>

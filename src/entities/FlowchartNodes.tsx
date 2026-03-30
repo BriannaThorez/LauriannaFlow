@@ -1,12 +1,13 @@
 import { useFrame, useThree } from '@react-three/fiber';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { useFlowchartStore, Shape } from '../shared/utils/store';
 import { getMenuOffset } from '../shared/utils/layout';
 import { Text, Html } from '@react-three/drei';
-import '../shared/shaders/ShapeSDFMaterial';
+import { ShapeSDFVertexShader, ShapeSDFFragmentShader } from '../shared/shaders/ShapeSDFMaterial';
 import { RadialMenu } from '../components/RadialMenu';
 import { RotateCw } from 'lucide-react';
 import * as THREE from 'three';
+import CustomShaderMaterial from 'three-custom-shader-material';
 
 const RotateHandle = ({ shapeId, position, rotation }: { shapeId: string, position: [number, number], rotation: number }) => {
   const { setIsRotating, setDragOffset, setIsPanning } = useFlowchartStore();
@@ -54,12 +55,12 @@ const RotateHandle = ({ shapeId, position, rotation }: { shapeId: string, positi
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
-      {/* Invisible larger hit area */}
-      <circleGeometry args={[20, 32]} />
+      {/* Invisible hit area - Adjusted to match the visual w-40 (160px) button size at zoom 10 */}
+      <circleGeometry args={[8, 32]} />
       <meshBasicMaterial transparent opacity={0} />
       
       {/* Visual handle - matches RadialMenu trigger style */}
-      <Html center transform scale={1}>
+      <Html center transform scale={1} zIndexRange={[10000, 10100]} portal={{ current: document.body }}>
         <div className="pointer-events-none w-40 h-40 rounded-full bg-background border-[8px] border-primary text-primary flex items-center justify-center shadow-[0_0_80px_rgba(var(--primary-rgb),0.4)]">
           <div className="scale-[4]">
             <RotateCw size={22} />
@@ -165,14 +166,16 @@ const Port = ({ position, type, shapeId }: { position: [number, number], type: a
 };
 
 export const FlowchartNodes = () => {
-  const { shapes, selectedId, setSelectedId, activeTool, addLink, updateShape, editingId, setEditingId, linkingFrom } = useFlowchartStore();
-  const materialRefs = useRef<any[]>([]);
+  const { shapes, selectedId, setSelectedId, activeTool, updateShape, editingId, setEditingId, linkingFrom } = useFlowchartStore();
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const materialRef = useRef<any>(null);
 
-  useFrame((state) => {
-    materialRefs.current.forEach((mat) => {
-      if (mat) mat.uTime = state.clock.elapsedTime;
-    });
-  });
+  // Instanced Attributes
+  const colorArray = useMemo(() => new Float32Array(shapes.length * 3), [shapes.length]);
+  const shapeTypeArray = useMemo(() => new Float32Array(shapes.length), [shapes.length]);
+  const isSelectedArray = useMemo(() => new Float32Array(shapes.length), [shapes.length]);
+  const sizeArray = useMemo(() => new Float32Array(shapes.length * 2), [shapes.length]);
+  const opacityArray = useMemo(() => new Float32Array(shapes.length), [shapes.length]);
 
   const getShapeType = (type: string) => {
     if (type === 'box') return 0.0;
@@ -185,6 +188,48 @@ export const FlowchartNodes = () => {
     if (type === 'trapezoid') return 7.0;
     return 0.0;
   };
+
+  useFrame((state) => {
+    if (materialRef.current && materialRef.current.uniforms) {
+      materialRef.current.uniforms.uTime.value = state.clock.elapsedTime;
+    }
+
+    if (!meshRef.current) return;
+
+    const tempMatrix = new THREE.Matrix4();
+    const tempRotation = new THREE.Quaternion();
+    const tempPosition = new THREE.Vector3();
+    const tempScale = new THREE.Vector3(1, 1, 1);
+
+    shapes.forEach((shape, i) => {
+      tempPosition.set(shape.position[0], shape.position[1], 0);
+      tempRotation.setFromEuler(new THREE.Euler(0, 0, shape.rotation || 0));
+      
+      // Set scale to match shape size + padding
+      tempScale.set(shape.size[0] + 12, shape.size[1] + 12, 1);
+      
+      tempMatrix.compose(tempPosition, tempRotation, tempScale);
+      meshRef.current!.setMatrixAt(i, tempMatrix);
+
+      const color = new THREE.Color(shape.color || '#22d3ee');
+      colorArray[i * 3] = color.r;
+      colorArray[i * 3 + 1] = color.g;
+      colorArray[i * 3 + 2] = color.b;
+
+      shapeTypeArray[i] = getShapeType(shape.type);
+      isSelectedArray[i] = selectedId === shape.id ? 1.0 : 0.0;
+      sizeArray[i * 2] = shape.size[0] + 12;
+      sizeArray[i * 2 + 1] = shape.size[1] + 12;
+      opacityArray[i] = shape.type === 'text' ? 0.0 : 1.0;
+    });
+
+    meshRef.current.instanceMatrix.needsUpdate = true;
+    if (meshRef.current.geometry.attributes.aColor) meshRef.current.geometry.attributes.aColor.needsUpdate = true;
+    if (meshRef.current.geometry.attributes.aShapeType) meshRef.current.geometry.attributes.aShapeType.needsUpdate = true;
+    if (meshRef.current.geometry.attributes.aIsSelected) meshRef.current.geometry.attributes.aIsSelected.needsUpdate = true;
+    if (meshRef.current.geometry.attributes.aSize) meshRef.current.geometry.attributes.aSize.needsUpdate = true;
+    if (meshRef.current.geometry.attributes.aOpacity) meshRef.current.geometry.attributes.aOpacity.needsUpdate = true;
+  });
 
   const handleNodePointerDown = (e: any, id: string) => {
     if (e.button === 2) return; // Ignore right click
@@ -232,7 +277,56 @@ export const FlowchartNodes = () => {
 
   return (
     <group>
-      {shapes.map((shape, i) => {
+      {/* Phase 1: High-Performance Instanced SDFs */}
+      <instancedMesh
+        key={shapes.length} // Recreate if count changes for simplicity, though dynamic update is possible
+        ref={meshRef}
+        args={[null as any, null as any, shapes.length]}
+        frustumCulled={false}
+        onPointerDown={(e) => {
+          if (e.instanceId !== undefined) {
+            handleNodePointerDown(e, shapes[e.instanceId].id);
+          }
+        }}
+        onDoubleClick={(e) => {
+          if (e.instanceId !== undefined) {
+            handleNodeDoubleClick(e, shapes[e.instanceId].id);
+          }
+        }}
+        onClick={(e) => {
+          if (e.instanceId !== undefined) {
+            const shape = shapes[e.instanceId];
+            if (!isInsideShape(e.uv, shape)) return;
+            e.stopPropagation();
+            setSelectedId(shape.id);
+          }
+        }}
+      >
+        <planeGeometry args={[1, 1]}>
+          <instancedBufferAttribute attach="attributes-aColor" args={[colorArray, 3]} />
+          <instancedBufferAttribute attach="attributes-aShapeType" args={[shapeTypeArray, 1]} />
+          <instancedBufferAttribute attach="attributes-aIsSelected" args={[isSelectedArray, 1]} />
+          <instancedBufferAttribute attach="attributes-aSize" args={[sizeArray, 2]} />
+          <instancedBufferAttribute attach="attributes-aOpacity" args={[opacityArray, 1]} />
+        </planeGeometry>
+        <CustomShaderMaterial
+          ref={materialRef}
+          baseMaterial={THREE.MeshPhysicalMaterial}
+          vertexShader={ShapeSDFVertexShader}
+          fragmentShader={ShapeSDFFragmentShader}
+          transparent
+          roughness={0.1}
+          metalness={0.8}
+          clearcoat={1.0}
+          clearcoatRoughness={0.1}
+          uniforms={{
+            uTime: { value: 0.0 },
+          }}
+        />
+      </instancedMesh>
+
+      {/* Individual Overlays (Text, Menu, Ports) */}
+      {shapes.map((shape) => {
         const menuOffset = getMenuOffset(shape, shapes);
         
         return (
@@ -241,31 +335,9 @@ export const FlowchartNodes = () => {
             position={[shape.position[0], shape.position[1], 0]}
             rotation={[0, 0, shape.rotation || 0]}
           >
-            <mesh 
-              onPointerDown={(e) => handleNodePointerDown(e, shape.id)}
-              onDoubleClick={(e) => handleNodeDoubleClick(e, shape.id)}
-              onClick={(e) => {
-                if (!isInsideShape(e.uv, shape)) return;
-                e.stopPropagation();
-                setSelectedId(shape.id);
-              }}
-            >
-              <planeGeometry args={[shape.size[0] + 12, shape.size[1] + 12]} />
-              {/* @ts-ignore */}
-              <shapeSDFMaterial 
-                ref={(el: any) => (materialRefs.current[i] = el)}
-                transparent 
-                uShapeType={getShapeType(shape.type)}
-                uColor={shape.color || '#22d3ee'}
-                uOpacity={shape.type === 'text' ? 0 : 1}
-                uIsSelected={selectedId === shape.id ? 1.0 : 0.0}
-                uSize={[shape.size[0] + 12, shape.size[1] + 12]}
-              />
-            </mesh>
-
             {selectedId === shape.id && !editingId && (
               <>
-                <Html center transform scale={1} position={[menuOffset.x, menuOffset.y, 0.2]}>
+                <Html center transform scale={1} position={[menuOffset.x, menuOffset.y, 0.2]} zIndexRange={[10000, 10100]} portal={{ current: document.body }}>
                   <RadialMenu shapeId={shape.id} />
                 </Html>
                 

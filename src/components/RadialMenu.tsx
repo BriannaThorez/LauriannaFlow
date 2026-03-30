@@ -189,7 +189,7 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({ shapeId }) => {
       ref={containerRef}
       className="absolute pointer-events-auto"
       style={{
-        zIndex: 1000,
+        zIndex: 5000,
         width: 0,
         height: 0
       }}
