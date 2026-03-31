@@ -412,6 +412,8 @@ export const FlowchartNodes = () => {
     });
 
     meshRef.current.instanceMatrix.needsUpdate = true;
+    meshRef.current.computeBoundingSphere();
+    meshRef.current.computeBoundingBox();
     if (meshRef.current.geometry.attributes.aColor) meshRef.current.geometry.attributes.aColor.needsUpdate = true;
     if (meshRef.current.geometry.attributes.aShapeType) meshRef.current.geometry.attributes.aShapeType.needsUpdate = true;
     if (meshRef.current.geometry.attributes.aIsSelected) meshRef.current.geometry.attributes.aIsSelected.needsUpdate = true;

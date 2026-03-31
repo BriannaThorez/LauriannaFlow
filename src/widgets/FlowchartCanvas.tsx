@@ -246,10 +246,12 @@ const FlowchartCanvasInner = () => {
       setIsPanning(false);
       setIsRotating(false);
       setIsDragging(false);
+      setLinkingFrom(null);
+      setLinkingTo(null);
     };
     window.addEventListener('pointerup', handleGlobalUp);
     return () => window.removeEventListener('pointerup', handleGlobalUp);
-  }, [setIsPanning, setIsRotating, setIsDragging]);
+  }, [setIsPanning, setIsRotating, setIsDragging, setLinkingFrom, setLinkingTo]);
 
   const handlePointerMove = (e: any) => {
     if (mode === 'viewer') return;
@@ -334,7 +336,7 @@ const FlowchartCanvasInner = () => {
     if (!selectedId || !isDraggableTool || !currentIsDragging) return;
     
     if (e.point) {
-      const GRID_SIZE = 5;
+      const GRID_SIZE = 2.5;
       const targetX = e.point.x - dragOffset[0];
       const targetY = e.point.y - dragOffset[1];
       
@@ -443,16 +445,18 @@ const FlowchartCanvasInner = () => {
         }}
       />
 
-      <FlowchartLinks />
-      <FlowchartNodes />
+      <group onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}>
+        <FlowchartLinks />
+        <FlowchartNodes />
+      </group>
 
       {/* World-space Grid - Aligned with objects */}
       <Grid
         infiniteGrid
         fadeDistance={1000}
         fadeStrength={5}
-        cellSize={10}
-        sectionSize={50}
+        cellSize={5}
+        sectionSize={25}
         sectionColor={gridColor}
         sectionThickness={1.5}
         cellColor={cellColor}
